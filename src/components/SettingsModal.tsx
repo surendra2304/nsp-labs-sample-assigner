@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { INITIAL_SAMPLERS } from '../context/AppContext';
+import type { SampleRequest } from '../types';
 import {
   Settings,
   X,
@@ -8,10 +9,12 @@ import {
   Upload,
   Copy,
   Check,
-  RotateCcw,
   Database,
   FileJson,
-  CheckCircle2
+  CheckCircle2,
+  KeyRound,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -20,12 +23,15 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { samplers, requests, setAllSamplers, resetAllSamplersToHome } = useApp();
+  const { samplers, requests, settings, setAllSamplers, setAllRequests, resetAllSamplersToHome, updateSettings } = useApp();
 
   const [copied, setCopied] = useState(false);
   const [importJson, setImportJson] = useState('');
   const [importSuccess, setImportSuccess] = useState(false);
   const [importError, setImportError] = useState('');
+  const [apiKeyDraft, setApiKeyDraft] = useState(settings.googleMapsApiKey || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
 
   if (!isOpen) return null;
 
@@ -69,18 +75,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
     try {
       const parsed = JSON.parse(importJson.trim());
-      let importedSamplers = null;
+      let importedSamplers: unknown = null;
+      let importedRequests: SampleRequest[] = [];
 
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
-        // Direct samplers array
+      if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0] as any).name) {
+        // Direct samplers array (legacy format, no requests included)
         importedSamplers = parsed;
-      } else if (parsed.samplers && Array.isArray(parsed.samplers)) {
+      } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).samplers)) {
         // Full backup object
-        importedSamplers = parsed.samplers;
+        importedSamplers = (parsed as any).samplers;
+        const maybeRequests = (parsed as any).requests;
+        if (Array.isArray(maybeRequests)) {
+          // Only keep requests that still have a usable shape
+          importedRequests = maybeRequests.filter(
+            (r: any) => r && typeof r === 'object' && r.id && r.coords && r.coords.lat
+          );
+        }
       }
 
       if (importedSamplers) {
-        setAllSamplers(importedSamplers);
+        setAllSamplers(importedSamplers as any);
+        setAllRequests(importedRequests);
         setImportSuccess(true);
         setImportJson('');
         setTimeout(() => setImportSuccess(false), 3000);
@@ -90,6 +105,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     } catch (err: any) {
       setImportError('Invalid JSON format. Please paste valid backup code.');
     }
+  };
+
+  // Save the Google Maps API key entered in the settings form
+  const handleSaveApiKey = () => {
+    const trimmed = apiKeyDraft.trim();
+    updateSettings({ googleMapsApiKey: trimmed });
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 2500);
   };
 
   // Factory reset to default 3 samplers
@@ -131,6 +154,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-4 space-y-4 overflow-y-auto flex-1 text-xs">
+          {/* Section 0: Google Maps API Key */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+            <div className="flex items-center gap-2 font-bold text-slate-800">
+              <KeyRound className="w-4 h-4 text-amber-500" />
+              <span>Google Maps API Key</span>
+            </div>
+            <p className="text-[11px] text-slate-600">
+              Enables satellite imagery, village geocoding and real road distances. Without a valid key the
+              map automatically falls back to OpenStreetMap and distances use an offline road estimate.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKeyDraft}
+                  onChange={(e) => setApiKeyDraft(e.target.value)}
+                  placeholder="AIza..."
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="w-full p-2 pr-9 bg-white border border-slate-300 rounded-lg outline-none font-mono text-[11px] text-slate-800 focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey((v) => !v)}
+                  title={showApiKey ? 'Hide key' : 'Show key'}
+                  className="absolute right-1.5 top-1.5 p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                >
+                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveApiKey}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer active:scale-98 shrink-0"
+              >
+                {apiKeySaved ? 'Saved!' : 'Save'}
+              </button>
+            </div>
+            {apiKeySaved && (
+              <p className="text-emerald-700 font-bold text-[11px] flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> API key saved — the map will reload with it.
+              </p>
+            )}
+          </div>
+
           {/* Section 1: Export Data */}
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
             <div className="flex items-center gap-2 font-bold text-slate-800">
@@ -138,7 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <span>Export & Backup Data</span>
             </div>
             <p className="text-[11px] text-slate-600">
-              Export all your configured samplers, phone numbers, and coordinates to transfer to another phone or keep a safe backup.
+              Export your samplers and today's samples to transfer to another phone or keep a safe backup.
             </p>
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
@@ -168,7 +236,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <span>Import & Restore Data</span>
             </div>
             <p className="text-[11px] text-slate-600">
-              Paste your backup JSON text below to restore samplers on this phone:
+              Paste your backup JSON text below to restore samplers and today's samples on this phone:
             </p>
             <textarea
               rows={3}

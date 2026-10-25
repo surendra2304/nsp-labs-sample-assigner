@@ -67,24 +67,18 @@ interface AppContextType {
   samplers: Sampler[];
   companies: Company[];
   requests: SampleRequest[];
-  selectedRequest: SampleRequest | null;
   settings: AppSettings;
-  activeView: 'map' | 'list' | 'batch';
-  setActiveView: (view: 'map' | 'list' | 'batch') => void;
-  setSelectedRequest: (req: SampleRequest | null) => void;
   createAndAssignSample: (
     reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>,
     samplerId: string
   ) => SampleRequest;
-  addSampleRequest: (reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>) => SampleRequest;
-  assignSampleToSampler: (sampleId: string, samplerId: string) => void;
   updateSamplerLocation: (samplerId: string, locationName: string, coords: Coordinates, subLocation?: string) => void;
   updateSampler: (updated: Sampler) => void;
   setAllSamplers: (newSamplers: Sampler[]) => void;
+  setAllRequests: (newRequests: SampleRequest[]) => void;
   addSampler: (newSampler: Omit<Sampler, 'id' | 'activeAssignments'>) => void;
   deleteSampler: (samplerId: string) => void;
   resetAllSamplersToHome: () => void;
-  addCompany: (name: string, whatsappGroup?: string, groupInviteUrl?: string) => void;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   deleteSampleRequest: (id: string) => void;
   markSampleCollected: (id: string) => void;
@@ -96,13 +90,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Samplers state
   const [samplers, setSamplers] = useState<Sampler[]>(() => {
     const saved = localStorage.getItem('nsp_samplers');
-    return saved ? JSON.parse(saved) : INITIAL_SAMPLERS;
+    if (!saved) return INITIAL_SAMPLERS;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : INITIAL_SAMPLERS;
+    } catch (e) {
+      console.error('Could not read saved samplers, restoring defaults:', e);
+      return INITIAL_SAMPLERS;
+    }
   });
 
-  // Companies state
-  const [companies, setCompanies] = useState<Company[]>(() => {
+  // Companies state (read-only seeded list — no UI writes to it)
+  const [companies] = useState<Company[]>(() => {
     const saved = localStorage.getItem('nsp_companies');
-    return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
+    if (!saved) return INITIAL_COMPANIES;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : INITIAL_COMPANIES;
+    } catch (e) {
+      console.error('Could not read saved companies, restoring defaults:', e);
+      return INITIAL_COMPANIES;
+    }
   });
 
   // Sample requests state (clean out any legacy test samples like GNR Kuppanapudi)
@@ -140,9 +148,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       mapTypeId: 'hybrid'
     };
   });
-
-  const [selectedRequest, setSelectedRequest] = useState<SampleRequest | null>(null);
-  const [activeView, setActiveView] = useState<'map' | 'list' | 'batch'>('map');
 
   // Persistence effects
   useEffect(() => {
@@ -183,7 +188,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 1. Update requests state
     setRequests((prev) => [newReq, ...prev]);
-    setSelectedRequest(newReq);
 
     // 2. Dynamic Sampler Movement: Move sampler's current location directly to this new pond!
     setSamplers((prev) =>
@@ -206,56 +210,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     return newReq;
-  };
-
-  /**
-   * Adds a sample request in pending status
-   */
-  const addSampleRequest = (reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>): SampleRequest => {
-    const newReq: SampleRequest = {
-      ...reqData,
-      id: `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      tonnageNumber: reqData.tonnageNumber ?? parseNumericTonnage(reqData.countTons),
-      createdAt: new Date().toISOString(),
-      status: 'pending'
-    };
-    setRequests((prev) => [newReq, ...prev]);
-    setSelectedRequest(newReq);
-    return newReq;
-  };
-
-  /**
-   * Assigns an existing pending sample to a sampler
-   */
-  const assignSampleToSampler = (sampleId: string, samplerId: string) => {
-    setRequests((prevRequests) => {
-      const sample = prevRequests.find((r) => r.id === sampleId);
-      if (sample) {
-        // Move sampler location
-        setSamplers((prevSamplers) =>
-          prevSamplers.map((s) => {
-            if (s.id === samplerId) {
-              return {
-                ...s,
-                status: 'busy',
-                currentLocation: {
-                  name: sample.locationName,
-                  subLocation: sample.subLocation,
-                  coords: sample.coords,
-                  lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                },
-                activeAssignments: [...s.activeAssignments, sampleId]
-              };
-            }
-            return s;
-          })
-        );
-      }
-
-      return prevRequests.map((r) =>
-        r.id === sampleId ? { ...r, assignedSamplerId: samplerId, status: 'assigned' } : r
-      );
-    });
   };
 
   const updateSamplerLocation = (
@@ -289,6 +243,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSamplers(newSamplers);
   };
 
+  const setAllRequests = (newRequests: SampleRequest[]) => {
+    setRequests(newRequests);
+  };
+
   const addSampler = (newSampler: Omit<Sampler, 'id' | 'activeAssignments'>) => {
     const created: Sampler = {
       ...newSampler,
@@ -300,6 +258,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteSampler = (samplerId: string) => {
     setSamplers((prev) => prev.filter((s) => s.id !== samplerId));
+    // Return this sampler's samples to 'pending' so no request points at a deleted sampler
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.assignedSamplerId === samplerId
+          ? { ...r, assignedSamplerId: undefined, status: 'pending' }
+          : r
+      )
+    );
   };
 
   const resetAllSamplersToHome = () => {
@@ -315,18 +281,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAssignments: []
       }))
     );
+    // Clear the day's samples (the persistence effect writes the empty list back to localStorage)
     setRequests([]);
-    localStorage.removeItem('nsp_requests');
-  };
-
-  const addCompany = (name: string, whatsappGroup?: string, groupInviteUrl?: string) => {
-    const newComp: Company = {
-      id: `comp-${Date.now()}`,
-      name,
-      whatsappGroup: whatsappGroup || `${name} Group`,
-      groupInviteUrl
-    };
-    setCompanies((prev) => [...prev, newComp]);
   };
 
   const updateSettings = (newSettings: Partial<AppSettings>) => {
@@ -335,9 +291,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteSampleRequest = (id: string) => {
     setRequests((prev) => prev.filter((r) => r.id !== id));
-    if (selectedRequest?.id === id) {
-      setSelectedRequest(null);
-    }
+    // Also drop it from any sampler's active-assignment list
+    setSamplers((prev) =>
+      prev.map((s) =>
+        s.activeAssignments.includes(id)
+          ? { ...s, activeAssignments: s.activeAssignments.filter((a) => a !== id) }
+          : s
+      )
+    );
   };
 
   const markSampleCollected = (id: string) => {
@@ -352,21 +313,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         samplers,
         companies,
         requests,
-        selectedRequest,
         settings,
-        activeView,
-        setActiveView,
-        setSelectedRequest,
         createAndAssignSample,
-        addSampleRequest,
-        assignSampleToSampler,
         updateSamplerLocation,
         updateSampler,
         setAllSamplers,
+        setAllRequests,
         addSampler,
         deleteSampler,
         resetAllSamplersToHome,
-        addCompany,
         updateSettings,
         deleteSampleRequest,
         markSampleCollected
