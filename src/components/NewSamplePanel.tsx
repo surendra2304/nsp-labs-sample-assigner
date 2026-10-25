@@ -18,7 +18,6 @@ import {
   RotateCcw,
   Building2,
   Mic,
-  MicOff,
   Search
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -117,7 +116,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
     const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome on Android or Desktop.');
+      alert('Speech recognition is not supported in this browser. Please use Chrome on Android.');
       return;
     }
 
@@ -128,7 +127,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.lang = 'en-IN'; // Indian English / accent recognition
+      recognition.lang = 'en-IN';
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
@@ -301,26 +300,28 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 md:p-6 transition-all">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-3.5 sm:p-5 transition-all">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-800">New Sample Dispatch</h2>
-            <p className="text-xs text-slate-500">Paste WhatsApp SMS or type pond village</p>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+              New Sample Dispatch
+            </h2>
+            <p className="text-[10px] sm:text-xs text-slate-500">Paste SMS or enter village</p>
           </div>
         </div>
 
         {/* Company Dropdown */}
-        <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs">
-          <Building2 className="w-3.5 h-3.5 text-slate-400" />
+        <div className="flex items-center gap-1 bg-slate-100/90 px-2 py-1.5 rounded-lg border border-slate-200 text-xs">
+          <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
           <select
             value={company}
             onChange={(e) => setCompany(e.target.value)}
-            className="bg-transparent font-semibold text-slate-700 outline-none cursor-pointer"
+            className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
           >
             {companies.map((c) => (
               <option key={c.id} value={c.name}>
@@ -332,24 +333,24 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
       </div>
 
       {!assignedSuccess ? (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {/* Quick Paste Message Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
               <span>📋 Paste Company WhatsApp Message:</span>
-              <span className="text-[10px] text-blue-600 font-normal">Auto-detects all details</span>
+              <span className="text-[10px] text-blue-600 font-semibold">Auto-fill enabled</span>
             </label>
             <textarea
               rows={3}
               value={rawText}
               onChange={(e) => handleRawTextChange(e.target.value)}
               placeholder="Paste message e.g.&#10;Harvest date 26/10/26&#10;Gnr&#10;90c-2tons&#10;255+&#10;Kuppanapudi&#10;+919014747367"
-              className="w-full text-xs font-mono p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
+              className="w-full text-base sm:text-xs font-mono p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
             />
           </div>
 
           {/* Form Fields Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             <div>
               <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Date</label>
               <input
@@ -357,18 +358,18 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                 value={harvestDate}
                 onChange={(e) => setHarvestDate(e.target.value)}
                 placeholder="26/10/26"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-800 focus:bg-white focus:border-blue-500"
+                className="w-full p-2.5 sm:p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-900 text-base sm:text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Farmer / Lot Code</label>
+              <label className="block text-[11px] font-medium text-slate-600 mb-0.5">Farmer Code</label>
               <input
                 type="text"
                 value={farmerCode}
                 onChange={(e) => setFarmerCode(e.target.value)}
                 placeholder="Gnr"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-800 focus:bg-white focus:border-blue-500"
+                className="w-full p-2.5 sm:p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-900 text-base sm:text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
 
@@ -379,7 +380,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                 value={countTons}
                 onChange={(e) => setCountTons(e.target.value)}
                 placeholder="90c-2tons"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-800 focus:bg-white focus:border-blue-500"
+                className="w-full p-2.5 sm:p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-900 text-base sm:text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
 
@@ -390,21 +391,21 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                 value={rateSpecs}
                 onChange={(e) => setRateSpecs(e.target.value)}
                 placeholder="255+"
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-800 focus:bg-white focus:border-blue-500"
+                className="w-full p-2.5 sm:p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none font-semibold text-slate-900 text-base sm:text-xs focus:bg-white focus:border-blue-500"
               />
             </div>
           </div>
 
           {/* Location & Contact Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-slate-50/90 p-3 rounded-xl border border-slate-200/70">
             {/* Left: Location & Sub-location with Autocomplete & Voice */}
             <div className="space-y-2">
               <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5 flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5 flex items-center justify-between">
                     <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-red-500" />
-                      Pond Village / Town:
+                      <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                      Village / Town:
                     </span>
                     <button
                       type="button"
@@ -412,11 +413,11 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                       className={`p-1 rounded-full transition-all cursor-pointer ${
                         isListening
                           ? 'bg-red-500 text-white animate-pulse'
-                          : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          : 'text-slate-500 hover:text-blue-600 hover:bg-blue-50'
                       }`}
                       title="Speak village name"
                     >
-                      {isListening ? <Mic className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                      <Mic className="w-3.5 h-3.5" />
                     </button>
                   </label>
 
@@ -430,20 +431,20 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                       setShowSuggestions(true);
                     }}
                     placeholder="e.g. Kuppanapudi or Kalla"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg font-semibold text-slate-800 outline-none focus:border-blue-500"
+                    className="w-full p-2.5 sm:p-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-900 text-base sm:text-xs outline-none focus:border-blue-500"
                   />
 
                   {/* Autocomplete Suggestion Dropdown */}
                   {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-30 bg-white border border-slate-200 rounded-lg shadow-xl mt-1 overflow-hidden">
+                    <div className="absolute top-full left-0 right-0 z-30 bg-white border border-slate-200 rounded-lg shadow-xl mt-1 overflow-hidden max-h-48 overflow-y-auto">
                       {suggestions.map((v) => (
                         <div
                           key={v}
                           onClick={() => handleSelectSuggestion(v)}
-                          className="px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium cursor-pointer flex items-center justify-between border-b border-slate-100 last:border-0"
+                          className="px-3 py-2 text-sm sm:text-xs text-slate-800 hover:bg-blue-50 hover:text-blue-700 font-semibold cursor-pointer flex items-center justify-between border-b border-slate-100 last:border-0"
                         >
                           <span>{v}</span>
-                          <span className="text-[10px] text-slate-400">West Godavari Hub</span>
+                          <span className="text-[10px] text-slate-400">Aquaculture Hub</span>
                         </div>
                       ))}
                     </div>
@@ -451,15 +452,15 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                 </div>
 
                 <div className="w-1/3">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                    Landmark / (Sub):
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                    Landmark:
                   </label>
                   <input
                     type="text"
                     value={subLocation}
                     onChange={(e) => setSubLocation(e.target.value)}
                     placeholder="konalapalli"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 outline-none focus:border-blue-500"
+                    className="w-full p-2.5 sm:p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-900 text-base sm:text-xs outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -473,7 +474,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                   value={googleMapsUrl}
                   onChange={(e) => setGoogleMapsUrl(e.target.value)}
                   placeholder="https://maps.app.goo.gl/... or 16.5144, 81.4286"
-                  className="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-mono outline-none"
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-mono outline-none"
                 />
               </div>
             </div>
@@ -481,14 +482,14 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
             {/* Right: Phone Numbers */}
             <div className="space-y-2">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-0.5 flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-700 mb-0.5 flex items-center justify-between">
                   <span>Pond Owner Phone:</span>
                   {ownerPhone && (
                     <a
                       href={`tel:${ownerPhone}`}
-                      className="inline-flex items-center gap-1 text-[10px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded font-semibold hover:bg-green-100"
+                      className="inline-flex items-center gap-1 text-[11px] bg-green-100 text-green-800 border border-green-300 px-2 py-0.5 rounded font-bold hover:bg-green-200"
                     >
-                      <Phone className="w-2.5 h-2.5" /> Call Owner
+                      <Phone className="w-3 h-3" /> Call Owner
                     </a>
                   )}
                 </label>
@@ -497,33 +498,33 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                   value={ownerPhone}
                   onChange={(e) => setOwnerPhone(e.target.value)}
                   placeholder="+919014747367"
-                  className="w-full p-2 bg-white border border-slate-200 rounded-lg font-semibold text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full p-2.5 sm:p-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-900 text-base sm:text-xs outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                    Alt Contact Name:
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                    Alt Contact:
                   </label>
                   <input
                     type="text"
                     value={altContactName}
                     onChange={(e) => setAltContactName(e.target.value)}
                     placeholder="Madhu"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+                    className="w-full p-2.5 sm:p-2 bg-white border border-slate-200 rounded-lg text-base sm:text-xs outline-none focus:border-blue-500"
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                    Alt Contact Number:
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                    Alt Number:
                   </label>
                   <input
                     type="text"
                     value={altContactPhone}
                     onChange={(e) => setAltContactPhone(e.target.value)}
                     placeholder="9032259499"
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+                    className="w-full p-2.5 sm:p-2 bg-white border border-slate-200 rounded-lg text-base sm:text-xs outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -532,13 +533,13 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
 
           {/* Nearest Sampler Ranking Cards */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
                 <Navigation className="w-3.5 h-3.5 text-blue-600" />
                 Distance from Samplers' Current Locations:
               </span>
               {isCalculating && (
-                <span className="text-[11px] text-blue-600 animate-pulse">Calculating road routes...</span>
+                <span className="text-[10px] text-blue-600 animate-pulse font-semibold">Computing...</span>
               )}
             </div>
 
@@ -556,25 +557,27 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                     }}
                     className={`p-3 rounded-xl border text-xs cursor-pointer transition-all relative ${
                       isSelected
-                        ? 'bg-blue-50/80 border-blue-500 shadow-sm ring-2 ring-blue-200'
+                        ? 'bg-blue-50/90 border-blue-500 shadow-sm ring-2 ring-blue-300'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     {isNearest && (
-                      <span className="absolute -top-2 right-2 bg-emerald-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-xs uppercase tracking-wide">
+                      <span className="absolute -top-2 right-2 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-xs uppercase tracking-wide">
                         ★ Nearest
                       </span>
                     )}
 
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className="w-2.5 h-2.5 rounded-full"
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: item.sampler.color }}
                         />
-                        <span className="font-bold text-slate-800">{item.sampler.name}</span>
+                        <span className="font-extrabold text-slate-900 text-sm">
+                          {item.sampler.name}
+                        </span>
                       </div>
-                      <span className="font-extrabold text-blue-700 bg-blue-100/60 px-1.5 py-0.5 rounded text-[11px]">
+                      <span className="font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs">
                         {item.distanceKm} km
                       </span>
                     </div>
@@ -583,7 +586,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                       <span>
                         Current: <b>{item.sampler.currentLocation.name}</b>
                       </span>
-                      <span className="text-slate-500">{item.durationText}</span>
+                      <span className="text-slate-500 font-medium">{item.durationText}</span>
                     </div>
                   </div>
                 );
@@ -591,12 +594,12 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="pt-2">
+          {/* Big Action Assign Button */}
+          <div className="pt-1">
             <button
               onClick={handleAssign}
               disabled={!selectedSamplerId || !locationName}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-5 h-5" />
               <span>
@@ -609,34 +612,34 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
         </div>
       ) : (
         /* Assigned Success & WhatsApp Dispatch Screen */
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
-                <h3 className="font-bold text-xs text-emerald-900">
-                  Assigned Successfully to {samplers.find((s) => s.id === selectedSamplerId)?.name}!
+                <h3 className="font-bold text-xs sm:text-sm text-emerald-950">
+                  Assigned to {samplers.find((s) => s.id === selectedSamplerId)?.name}!
                 </h3>
-                <p className="text-[11px] text-emerald-700">
-                  Sampler's current location updated to <b>{locationName}</b>.
+                <p className="text-[11px] text-emerald-800">
+                  Current location moved to <b>{locationName}</b>.
                 </p>
               </div>
             </div>
             <button
               onClick={handleResetForNext}
-              className="px-2.5 py-1 text-xs bg-white text-emerald-800 font-semibold rounded-lg border border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1.5 text-xs bg-white text-emerald-800 font-bold rounded-lg border border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 cursor-pointer shrink-0"
             >
-              <RotateCcw className="w-3 h-3" /> New
+              <RotateCcw className="w-3.5 h-3.5" /> Next
             </button>
           </div>
 
           {/* WhatsApp Dispatch Preview */}
-          <div className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs shadow-inner relative">
+          <div className="bg-slate-900 text-slate-100 p-3.5 rounded-xl font-mono text-xs shadow-inner relative">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700">
               <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">
-                WhatsApp Dispatch Message Preview
+                WhatsApp Dispatch Preview
               </span>
-              <span className="text-emerald-400 text-[10px] font-semibold">Ready to send</span>
+              <span className="text-emerald-400 text-[10px] font-bold">Ready</span>
             </div>
 
             <pre className="whitespace-pre-wrap leading-relaxed font-mono text-xs">
@@ -648,16 +651,16 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
             <button
               onClick={handleSendWhatsApp}
-              className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+              className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
             >
               <Send className="w-4 h-4" />
-              <span>Send via WhatsApp to Group</span>
+              <span>Send via WhatsApp</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
 
             <button
               onClick={handleCopy}
-              className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="py-3 px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               {copied ? (
                 <>
@@ -676,7 +679,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
           <div className="text-center pt-2">
             <button
               onClick={handleResetForNext}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+              className="text-xs text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
             >
               + Add Another Sample Request
             </button>

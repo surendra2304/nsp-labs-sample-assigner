@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { REGIONAL_AQUACULTURE_HUBS, findKnownHubCoordinates } from '../utils/geoUtils';
-import { Sampler, Coordinates } from '../types';
+import type { Coordinates } from '../types';
 import {
   Users,
   X,
@@ -10,8 +10,6 @@ import {
   RotateCcw,
   Plus,
   Trash2,
-  Edit2,
-  Check,
   Phone,
   Navigation
 } from 'lucide-react';
@@ -24,14 +22,12 @@ interface SamplerManagerModalProps {
 export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen, onClose }) => {
   const {
     samplers,
-    updateSampler,
     updateSamplerLocation,
     addSampler,
     deleteSampler,
     resetAllSamplersToHome
   } = useApp();
 
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // New Sampler Form State
@@ -89,42 +85,42 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90dvh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/80">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/90">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
               <Users className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-800">Manage Samplers & Locations</h2>
-              <p className="text-[11px] text-slate-500">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">Manage Samplers & Locations</h2>
+              <p className="text-[10px] sm:text-[11px] text-slate-500">
                 Update locations, home bases, or reset at the start of the day
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Global Action Bar */}
-        <div className="p-4 bg-blue-50/50 border-b border-blue-100/60 flex flex-wrap items-center justify-between gap-2">
+        <div className="p-3 bg-blue-50/70 border-b border-blue-100 flex flex-wrap items-center justify-between gap-2">
           <button
             onClick={resetAllSamplersToHome}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 shadow-xs cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-700 bg-white border border-blue-200 rounded-xl hover:bg-blue-50 shadow-xs cursor-pointer active:scale-[0.98]"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>🌅 Reset All Samplers to Home (Start of Day)</span>
+            <span>🌅 Reset All to Home (Morning)</span>
           </button>
 
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-xs cursor-pointer"
+            className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{showAddForm ? 'Cancel' : 'Add Sampler'}</span>
@@ -135,7 +131,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
         {showAddForm && (
           <form
             onSubmit={handleAddNewSampler}
-            className="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs"
+            className="p-3.5 bg-slate-50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs"
           >
             <div>
               <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">Name</label>
@@ -145,7 +141,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
-                className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none text-base sm:text-xs"
               />
             </div>
             <div>
@@ -155,7 +151,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                 placeholder="+9198480..."
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none text-base sm:text-xs"
               />
             </div>
             <div>
@@ -165,13 +161,13 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                 placeholder="e.g. Bhimavaram"
                 value={newHomeBase}
                 onChange={(e) => setNewHomeBase(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none text-base sm:text-xs"
               />
             </div>
             <div className="flex items-end">
               <button
                 type="submit"
-                className="w-full p-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
               >
                 Save
               </button>
@@ -180,7 +176,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
         )}
 
         {/* Samplers List */}
-        <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+        <div className="p-3 sm:p-4 space-y-3 overflow-y-auto flex-1">
           {samplers.map((sampler) => (
             <div
               key={sampler.id}
@@ -192,12 +188,12 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                     className="w-3.5 h-3.5 rounded-full ring-2 ring-white shadow-xs"
                     style={{ backgroundColor: sampler.color }}
                   />
-                  <h3 className="font-bold text-sm text-slate-800">{sampler.name}</h3>
+                  <h3 className="font-extrabold text-sm text-slate-900">{sampler.name}</h3>
                   <a
                     href={`tel:${sampler.phone}`}
-                    className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                    className="text-xs text-blue-600 font-semibold hover:underline flex items-center gap-1"
                   >
-                    <Phone className="w-3 h-3" />
+                    <Phone className="w-3 h-3 text-emerald-600" />
                     <span>{sampler.phone}</span>
                   </a>
                 </div>
@@ -205,7 +201,6 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => {
-                      // Reset just this sampler to home base
                       updateSamplerLocation(
                         sampler.id,
                         sampler.homeBase.name,
@@ -223,7 +218,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                     onClick={() =>
                       setLocationUpdateId(locationUpdateId === sampler.id ? null : sampler.id)
                     }
-                    className="px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 flex items-center gap-1 cursor-pointer"
                   >
                     <MapPin className="w-3 h-3" />
                     <span>Set Location</span>
@@ -242,7 +237,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
               </div>
 
               {/* Location details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 pt-1 border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-slate-600 pt-1 border-t border-slate-100">
                 <div className="flex items-center gap-1.5">
                   <Home className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span>
@@ -250,9 +245,9 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <Navigation className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span>
-                    Current Location: <b className="text-emerald-700">{sampler.currentLocation.name}</b>
+                    Current Location: <b className="text-emerald-700 font-extrabold">{sampler.currentLocation.name}</b>
                     {sampler.currentLocation.subLocation && (
                       <span className="text-slate-500"> ({sampler.currentLocation.subLocation})</span>
                     )}
@@ -260,7 +255,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                 </div>
               </div>
 
-              {/* Set Location Input Panel (Drop-down or custom name) */}
+              {/* Set Location Input Panel */}
               {locationUpdateId === sampler.id && (
                 <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -269,14 +264,14 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                   <div className="flex gap-2 mb-2">
                     <input
                       type="text"
-                      placeholder="Type village name (e.g. Mogalthuru, Vempa, Undi)"
+                      placeholder="Type village name (e.g. Mogalthuru, Vempa)"
                       value={customLocationName}
                       onChange={(e) => setCustomLocationName(e.target.value)}
-                      className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-500"
+                      className="flex-1 p-2 bg-white border border-slate-300 rounded-lg outline-none text-base sm:text-xs"
                     />
                     <button
                       onClick={() => handleSaveLocation(sampler.id)}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg cursor-pointer"
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg cursor-pointer"
                     >
                       Update
                     </button>
@@ -299,7 +294,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
                               setCustomLocationName('');
                             }
                           }}
-                          className="px-2 py-0.5 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded text-slate-700 cursor-pointer"
+                          className="px-2 py-1 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 rounded text-slate-800 font-medium cursor-pointer"
                         >
                           {hub}
                         </button>
@@ -316,7 +311,7 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
         <div className="p-3 bg-slate-50 border-t border-slate-100 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl cursor-pointer"
           >
             Done
           </button>
