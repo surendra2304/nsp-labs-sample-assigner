@@ -80,6 +80,7 @@ interface AppContextType {
   assignSampleToSampler: (sampleId: string, samplerId: string) => void;
   updateSamplerLocation: (samplerId: string, locationName: string, coords: Coordinates, subLocation?: string) => void;
   updateSampler: (updated: Sampler) => void;
+  setAllSamplers: (newSamplers: Sampler[]) => void;
   addSampler: (newSampler: Omit<Sampler, 'id' | 'activeAssignments'>) => void;
   deleteSampler: (samplerId: string) => void;
   resetAllSamplersToHome: () => void;
@@ -272,6 +273,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSamplers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   };
 
+  const setAllSamplers = (newSamplers: Sampler[]) => {
+    setSamplers(newSamplers);
+  };
+
   const addSampler = (newSampler: Omit<Sampler, 'id' | 'activeAssignments'>) => {
     const created: Sampler = {
       ...newSampler,
@@ -343,6 +348,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         assignSampleToSampler,
         updateSamplerLocation,
         updateSampler,
+        setAllSamplers,
         addSampler,
         deleteSampler,
         resetAllSamplersToHome,
