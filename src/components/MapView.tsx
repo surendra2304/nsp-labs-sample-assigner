@@ -5,29 +5,32 @@ import type { Coordinates, Sampler } from '../types';
 import L from 'leaflet';
 import {
   Navigation,
-  Crosshair,
-  Maximize2,
-  Minimize2
+  Crosshair
 } from 'lucide-react';
 
 interface MapViewProps {
   onMapClick?: (coords: Coordinates) => void;
   pendingCoords?: Coordinates | null;
   targetSamplerId?: string | null;
+  onMapInteraction?: () => void;
 }
+
+// Default center of the map is Bhimavaram (NSP Labs Delta Headquarters)
+const BHIMAVARAM_CENTER: Coordinates = { lat: 16.5449, lng: 81.5212 };
+const DEFAULT_MAP_ZOOM = 12;
 
 export const MapView: React.FC<MapViewProps> = ({
   onMapClick,
   pendingCoords,
-  targetSamplerId
+  targetSamplerId,
+  onMapInteraction
 }) => {
-  const { samplers, requests, selectedRequest, settings, setSelectedRequest } = useApp();
+  const { samplers, requests, settings, setSelectedRequest, deleteSampleRequest } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // Map Engine state: defaults to 'google'
   const [engine, setEngine] = useState<'google' | 'leaflet'>('google');
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid'>('hybrid');
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Google Maps refs
   const googleMapRef = useRef<any>(null);
@@ -35,12 +38,19 @@ export const MapView: React.FC<MapViewProps> = ({
   const googleRequestMarkersRef = useRef<{ [key: string]: any }>({});
   const googlePendingMarkerRef = useRef<any>(null);
   const googleRoutePolylineRef = useRef<any>(null);
-  const googleHistoryPolylinesRef = useRef<any[]>([]);
 
   // Leaflet fallback refs
   const leafletMapRef = useRef<L.Map | null>(null);
-  const leafletMarkersRef = useRef<{ [key: string]: L.Marker }>({});
-  const leafletPolylineRef = useRef<L.Polyline | null>(null);
+
+  // Expose delete helper for InfoWindow clicks
+  useEffect(() => {
+    (window as any).__deleteSampleRequest = (id: string) => {
+      deleteSampleRequest(id);
+    };
+    return () => {
+      delete (window as any).__deleteSampleRequest;
+    };
+  }, [deleteSampleRequest]);
 
   // 1. Google Maps auth failure fallback
   useEffect(() => {
@@ -51,7 +61,7 @@ export const MapView: React.FC<MapViewProps> = ({
     };
   }, []);
 
-  // 2. Initialize Map (Google Maps preferred, Leaflet fallback)
+  // 2. Initialize Map (Google Maps preferred, centered on Bhimavaram)
   useEffect(() => {
     let isMounted = true;
     if (!mapContainerRef.current) return;
@@ -65,8 +75,8 @@ export const MapView: React.FC<MapViewProps> = ({
             mapContainerRef.current.innerHTML = '';
 
             const map = new g.maps.Map(mapContainerRef.current, {
-              center: settings.mapCenter,
-              zoom: settings.mapZoom,
+              center: BHIMAVARAM_CENTER,
+              zoom: DEFAULT_MAP_ZOOM,
               mapTypeId: mapType,
               streetViewControl: false,
               mapTypeControl: false,
@@ -74,13 +84,25 @@ export const MapView: React.FC<MapViewProps> = ({
               zoomControl: true
             });
 
+            // Keep focus when clicking on map
             map.addListener('click', (e: any) => {
+              if (onMapInteraction) onMapInteraction();
               if (e.latLng && onMapClick) {
                 onMapClick({
                   lat: e.latLng.lat(),
                   lng: e.latLng.lng()
                 });
               }
+            });
+
+            // Keep focus when zooming in/out
+            map.addListener('zoom_changed', () => {
+              if (onMapInteraction) onMapInteraction();
+            });
+
+            // Keep focus when dragging map
+            map.addListener('dragend', () => {
+              if (onMapInteraction) onMapInteraction();
             });
 
             googleMapRef.current = map;
@@ -93,12 +115,12 @@ export const MapView: React.FC<MapViewProps> = ({
           }
         });
     } else {
-      // Leaflet OpenStreetMap Engine
+      // Leaflet OpenStreetMap Engine centered on Bhimavaram
       if (!leafletMapRef.current) {
         mapContainerRef.current.innerHTML = '';
         const lMap = L.map(mapContainerRef.current, {
-          center: [settings.mapCenter.lat, settings.mapCenter.lng],
-          zoom: settings.mapZoom,
+          center: [BHIMAVARAM_CENTER.lat, BHIMAVARAM_CENTER.lng],
+          zoom: DEFAULT_MAP_ZOOM,
           zoomControl: true
         });
 
@@ -108,12 +130,21 @@ export const MapView: React.FC<MapViewProps> = ({
         }).addTo(lMap);
 
         lMap.on('click', (e: L.LeafletMouseEvent) => {
+          if (onMapInteraction) onMapInteraction();
           if (onMapClick) {
             onMapClick({
               lat: e.latlng.lat,
               lng: e.latlng.lng
             });
           }
+        });
+
+        lMap.on('zoomend', () => {
+          if (onMapInteraction) onMapInteraction();
+        });
+
+        lMap.on('moveend', () => {
+          if (onMapInteraction) onMapInteraction();
         });
 
         leafletMapRef.current = lMap;
@@ -123,7 +154,7 @@ export const MapView: React.FC<MapViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [engine, settings.googleMapsApiKey, settings.mapCenter, settings.mapZoom, onMapClick]);
+  }, [engine, settings.googleMapsApiKey, onMapClick, onMapInteraction]);
 
   // Handle Map Type Change (Roadmap vs Hybrid)
   useEffect(() => {
@@ -134,6 +165,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // Focus map on a specific sampler
   const handlePanToSampler = (sampler: Sampler) => {
+    if (onMapInteraction) onMapInteraction();
     if (engine === 'google' && googleMapRef.current) {
       googleMapRef.current.panTo(sampler.currentLocation.coords);
       googleMapRef.current.setZoom(13);
@@ -145,27 +177,29 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   };
 
-  // Center / Fit all active points on map
-  const handleFitAll = useCallback(() => {
-    if (engine === 'google' && googleMapRef.current && (window as any).google) {
-      const g = (window as any).google;
-      const bounds = new g.maps.LatLngBounds();
-      samplers.forEach((s) => bounds.extend(s.currentLocation.coords));
-      requests.forEach((r) => bounds.extend(r.coords));
-      if (pendingCoords) bounds.extend(pendingCoords);
-      googleMapRef.current.fitBounds(bounds, 60);
-    } else if (engine === 'leaflet' && leafletMapRef.current) {
-      const bounds = L.latLngBounds([]);
-      samplers.forEach((s) =>
-        bounds.extend([s.currentLocation.coords.lat, s.currentLocation.coords.lng])
-      );
-      requests.forEach((r) => bounds.extend([r.coords.lat, r.coords.lng]));
-      if (pendingCoords) bounds.extend([pendingCoords.lat, pendingCoords.lng]);
-      if (bounds.isValid()) {
-        leafletMapRef.current.fitBounds(bounds, { padding: [50, 50] });
+  // Center on Bhimavaram or fit active points
+  const handleCenterOrFit = useCallback(() => {
+    if (onMapInteraction) onMapInteraction();
+
+    if (pendingCoords && pendingCoords.lat) {
+      // Zoom to fit target pond and nearest sampler
+      if (engine === 'google' && googleMapRef.current && (window as any).google) {
+        const g = (window as any).google;
+        const bounds = new g.maps.LatLngBounds();
+        samplers.forEach((s) => bounds.extend(s.currentLocation.coords));
+        bounds.extend(pendingCoords);
+        googleMapRef.current.fitBounds(bounds, 60);
+      }
+    } else {
+      // Default: Center strictly on Bhimavaram
+      if (engine === 'google' && googleMapRef.current) {
+        googleMapRef.current.panTo(BHIMAVARAM_CENTER);
+        googleMapRef.current.setZoom(DEFAULT_MAP_ZOOM);
+      } else if (engine === 'leaflet' && leafletMapRef.current) {
+        leafletMapRef.current.setView([BHIMAVARAM_CENTER.lat, BHIMAVARAM_CENTER.lng], DEFAULT_MAP_ZOOM);
       }
     }
-  }, [engine, samplers, requests, pendingCoords]);
+  }, [engine, samplers, pendingCoords, onMapInteraction]);
 
   // RENDER MARKERS (Google Maps)
   useEffect(() => {
@@ -201,6 +235,7 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           marker.addListener('click', () => {
+            if (onMapInteraction) onMapInteraction();
             const info = new g.maps.InfoWindow({
               content: `
                 <div style="font-family: sans-serif; padding: 4px;">
@@ -229,7 +264,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       });
 
-      // 2. Plot or Update Assigned Requests (Ponds)
+      // 2. Clean up removed or legacy requests
       const currentReqIds = new Set(requests.map((r) => r.id));
       Object.keys(googleRequestMarkersRef.current).forEach((id) => {
         if (!currentReqIds.has(id)) {
@@ -238,7 +273,20 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       });
 
+      // Plot valid assigned ponds (if any)
       requests.forEach((req) => {
+        // Exclude legacy mock "Gnr Kuppanapudi"
+        if (
+          req.farmerCode?.toLowerCase() === 'gnr' ||
+          req.locationName?.toLowerCase().includes('kuppanapudi')
+        ) {
+          if (googleRequestMarkersRef.current[req.id]) {
+            googleRequestMarkersRef.current[req.id].setMap(null);
+            delete googleRequestMarkersRef.current[req.id];
+          }
+          return;
+        }
+
         let marker = googleRequestMarkersRef.current[req.id];
         const assignedSampler = samplers.find((s) => s.id === req.assignedSamplerId);
         const pinColor = assignedSampler?.color || '#16a34a';
@@ -261,6 +309,7 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           marker.addListener('click', () => {
+            if (onMapInteraction) onMapInteraction();
             setSelectedRequest(req);
             const info = new g.maps.InfoWindow({
               content: `
@@ -268,7 +317,10 @@ export const MapView: React.FC<MapViewProps> = ({
                   <b style="color: ${pinColor}; font-size: 13px;">${req.farmerCode} - ${req.locationName}</b><br/>
                   <span style="font-size: 11px; color: #475569;">Count: <b>${req.countTons}</b></span><br/>
                   <span style="font-size: 11px; color: #475569;">Sampler: <b>@${assignedSampler?.name || 'Assigned'}</b></span><br/>
-                  ${req.ownerPhone ? `<a href="tel:${req.ownerPhone}" style="color: #0284c7; font-size: 11px;">📞 ${req.ownerPhone}</a>` : ''}
+                  ${req.ownerPhone ? `<a href="tel:${req.ownerPhone}" style="color: #0284c7; font-size: 11px;">📞 ${req.ownerPhone}</a><br/>` : ''}
+                  <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #e2e8f0;">
+                    <button onclick="window.__deleteSampleRequest && window.__deleteSampleRequest('${req.id}')" style="background: #ef4444; color: white; border: none; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer;">Remove Pin</button>
+                  </div>
                 </div>`
             });
             info.open(map, marker);
@@ -302,6 +354,7 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           pMarker.addListener('dragend', (e: any) => {
+            if (onMapInteraction) onMapInteraction();
             if (e.latLng && onMapClick) {
               onMapClick({
                 lat: e.latLng.lat(),
@@ -319,7 +372,7 @@ export const MapView: React.FC<MapViewProps> = ({
         googlePendingMarkerRef.current.setMap(null);
       }
     }
-  }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick]);
+  }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick, onMapInteraction]);
 
   // ROUTE LINES: Draw route between target sampler and pending pond
   useEffect(() => {
@@ -360,13 +413,14 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [engine, targetSamplerId, pendingCoords, samplers]);
 
   return (
-    <div
-      className={`relative w-full h-full bg-slate-900 transition-all ${
-        isFullscreen ? 'fixed inset-0 z-50' : ''
-      }`}
-    >
+    <div className="relative w-full h-full bg-slate-900 transition-all">
       {/* Map Canvas */}
-      <div ref={mapContainerRef} className="w-full h-full" />
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full"
+        onPointerUp={() => onMapInteraction?.()}
+        onTouchEnd={() => onMapInteraction?.()}
+      />
 
       {/* Top Left Sampler Status Badges (Underneath top header) */}
       <div className="absolute top-14 left-3 z-10 flex flex-wrap items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs text-white">
@@ -381,6 +435,7 @@ export const MapView: React.FC<MapViewProps> = ({
             <button
               key={sampler.id}
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => handlePanToSampler(sampler)}
               title={`Click to pan to ${sampler.name}`}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border font-medium transition-all cursor-pointer ${
@@ -402,12 +457,16 @@ export const MapView: React.FC<MapViewProps> = ({
         })}
       </div>
 
-      {/* Top Right Controls: Satellite toggle / Fit */}
+      {/* Top Right Controls: Satellite toggle / Center on Bhimavaram */}
       <div className="absolute top-14 right-3 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">
         {/* Satellite / Hybrid toggle */}
         <button
           type="button"
-          onClick={() => setMapType(mapType === 'hybrid' ? 'roadmap' : 'hybrid')}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (onMapInteraction) onMapInteraction();
+            setMapType(mapType === 'hybrid' ? 'roadmap' : 'hybrid');
+          }}
           className={`px-2 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
             mapType === 'hybrid'
               ? 'bg-blue-600 text-white shadow-xs'
@@ -418,11 +477,12 @@ export const MapView: React.FC<MapViewProps> = ({
           <span>🛰️ Satellite</span>
         </button>
 
-        {/* Center / Fit all */}
+        {/* Center Bhimavaram / Fit */}
         <button
           type="button"
-          onClick={handleFitAll}
-          title="Fit all samplers and ponds"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleCenterOrFit}
+          title="Center on Bhimavaram / Fit points"
           className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
         >
           <Crosshair className="w-4 h-4" />

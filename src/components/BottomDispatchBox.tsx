@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { parseCompanyMessage } from '../utils/messageParser';
 import { formatWhatsAppDispatchMessage, sendViaWhatsApp, copyTextToClipboard } from '../utils/dispatchFormatter';
 import { calculateRoadDistance, geocodePlace } from '../services/googleMapsService';
-import { parseLocationFromGoogleMapsString } from '../utils/geoUtils';
+import { findKnownHubCoordinates, parseLocationFromGoogleMapsString } from '../utils/geoUtils';
 import type { Coordinates, Sampler, SampleRequest } from '../types';
 import {
   Phone,
@@ -11,8 +11,7 @@ import {
   Copy,
   CheckCircle2,
   Navigation,
-  ArrowRight,
-  RotateCcw
+  ArrowRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -20,6 +19,7 @@ interface BottomDispatchBoxProps {
   onLocationChange: (coords: Coordinates | null) => void;
   onTargetSamplerChange: (samplerId: string | null) => void;
   targetSamplerId: string | null;
+  onRegisterFocusHandler?: (fn: () => void) => void;
 }
 
 interface SamplerDist {
@@ -31,12 +31,34 @@ interface SamplerDist {
 export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   onLocationChange,
   onTargetSamplerChange,
-  targetSamplerId
+  targetSamplerId,
+  onRegisterFocusHandler
 }) => {
   const { samplers, createAndAssignSample } = useApp();
 
   // The ONE input box for everything (message, village name, or Maps link)
   const [inputText, setInputText] = useState('');
+
+  // Cursor position preservation so map clicks/zooms never lose cursor or focus
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cursorPosRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+
+  // Expose focus restore function to parent so any map click/zoom restores focus without scrolling
+  const restoreFocus = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus({ preventScroll: true });
+      try {
+        const { start, end } = cursorPosRef.current;
+        textareaRef.current.setSelectionRange(start, end);
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (onRegisterFocusHandler) {
+      onRegisterFocusHandler(restoreFocus);
+    }
+  }, [onRegisterFocusHandler, restoreFocus]);
 
   // Extracted details
   const [extractedLocation, setExtractedLocation] = useState('');
@@ -46,6 +68,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const [countTons, setCountTons] = useState('');
   const [harvestDate, setHarvestDate] = useState('');
   const [rateSpecs, setRateSpecs] = useState('');
+  const [detectedCompany, setDetectedCompany] = useState('');
   const [resolvedCoords, setResolvedCoords] = useState<Coordinates | null>(null);
 
   // Proximity calculations
@@ -63,9 +86,11 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Parse input whenever text changes
+  // Parse input whenever text changes, with strict debounce & min length validation!
   useEffect(() => {
     const text = inputText.trim();
+
+    // 1. If text is empty: clear everything immediately
     if (!text) {
       setExtractedLocation('');
       setSubLocation('');
@@ -73,74 +98,114 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setFarmerCode('');
       setCountTons('');
       setRateSpecs('');
+      setHarvestDate('');
+      setDetectedCompany('');
       setResolvedCoords(null);
       setDistances([]);
       onLocationChange(null);
       return;
     }
 
-    let locName = '';
-    let subLoc = '';
-    let phone = '';
-    let fCode = '';
-    let cTons = '';
-    let rSpecs = '';
-    let hDate = '';
-    let directCoords: Coordinates | null = null;
-
-    // 1. Check if input is a Google Maps link or raw coordinates
+    // 2. Direct Google Maps link or coordinates
     const urlCheck = parseLocationFromGoogleMapsString(text);
     if (urlCheck.coords) {
-      directCoords = urlCheck.coords;
-      locName = 'Pond Location (from Maps link)';
-    }
-
-    // 2. Check if input is a full message
-    if (text.includes('\n')) {
-      const parsed = parseCompanyMessage(text);
-      locName = parsed.locationName;
-      subLoc = parsed.subLocation || '';
-      phone = parsed.ownerPhone;
-      fCode = parsed.farmerCode;
-      cTons = parsed.countTons;
-      rSpecs = parsed.rateSpecs;
-      hDate = parsed.harvestDate;
-      if (parsed.coords && !directCoords) {
-        directCoords = parsed.coords;
-      }
-    } else if (!directCoords) {
-      // Single line text: could be a village name (e.g. "Kuppanapudi", "Vempa", "Undi")
-      locName = text;
-    }
-
-    setExtractedLocation(locName);
-    setSubLocation(subLoc);
-    setOwnerPhone(phone);
-    setFarmerCode(fCode);
-    setCountTons(cTons);
-    setRateSpecs(rSpecs);
-    setHarvestDate(hDate);
-
-    // If direct coordinates found (e.g. from maps link)
-    if (directCoords) {
-      setResolvedCoords(directCoords);
-      onLocationChange(directCoords);
+      setExtractedLocation('Pond Location (from Maps link)');
+      setSubLocation('');
+      setOwnerPhone('');
+      setResolvedCoords(urlCheck.coords);
+      onLocationChange(urlCheck.coords);
       return;
     }
 
-    // Otherwise geocode the location name with Google Maps
-    if (locName) {
-      let isCurrent = true;
-      geocodePlace(locName).then((c) => {
-        if (isCurrent && c) {
-          setResolvedCoords(c);
-          onLocationChange(c);
+    // 3. Multi-line message (pasted message from harvesting company)
+    if (text.includes('\n')) {
+      const parsed = parseCompanyMessage(text);
+      setExtractedLocation(parsed.locationName);
+      setSubLocation(parsed.subLocation || '');
+      setOwnerPhone(parsed.ownerPhone);
+      setFarmerCode(parsed.farmerCode);
+      setCountTons(parsed.countTons);
+      setRateSpecs(parsed.rateSpecs);
+      setHarvestDate(parsed.harvestDate);
+
+      // Check if message mentions a company inside *...*
+      const compMatch = text.match(/\*([^*]+)\*/);
+      setDetectedCompany(compMatch ? compMatch[1].trim() : '');
+
+      if (parsed.coords) {
+        setResolvedCoords(parsed.coords);
+        onLocationChange(parsed.coords);
+        return;
+      }
+
+      const loc = parsed.locationName.trim();
+      if (loc && loc.length >= 3) {
+        // Known hub instant check
+        const hub = findKnownHubCoordinates(loc);
+        if (hub) {
+          setResolvedCoords(hub);
+          onLocationChange(hub);
+          return;
         }
-      });
-      return () => {
-        isCurrent = false;
-      };
+
+        // Geocode via Google Maps
+        let isCurrent = true;
+        geocodePlace(loc).then((c) => {
+          if (isCurrent && c) {
+            setResolvedCoords(c);
+            onLocationChange(c);
+          }
+        });
+        return () => {
+          isCurrent = false;
+        };
+      }
+      return;
     }
+
+    // 4. Single-line typing (e.g. typing a village name "N", "NA", "NAR", "Narasapuram")
+    // PREVENT RANDOM PINS: If text is less than 3 characters, DO NOT geocode!
+    if (text.length < 3) {
+      setExtractedLocation('');
+      setSubLocation('');
+      setOwnerPhone('');
+      setFarmerCode('');
+      setCountTons('');
+      setRateSpecs('');
+      setHarvestDate('');
+      setDetectedCompany('');
+      setResolvedCoords(null);
+      setDistances([]);
+      onLocationChange(null);
+      return;
+    }
+
+    // If >= 3 characters:
+    // A. Check if user typed an exact known regional aquaculture hub (instant match, no waiting)
+    const instantHub = findKnownHubCoordinates(text);
+    if (instantHub) {
+      setExtractedLocation(text);
+      setResolvedCoords(instantHub);
+      onLocationChange(instantHub);
+      return;
+    }
+
+    // B. Otherwise DEBOUNCE by 600ms so typing keystrokes don't spam random geocodes!
+    let isCurrent = true;
+    const timer = setTimeout(async () => {
+      if (!isCurrent) return;
+      const c = await geocodePlace(text);
+      if (isCurrent && c) {
+        setExtractedLocation(text);
+        setResolvedCoords(c);
+        onLocationChange(c);
+      }
+    }, 600);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
   }, [inputText, onLocationChange]);
 
   // Calculate driving distances from each sampler's CURRENT position
@@ -189,6 +254,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const handleSelectSampler = (samplerId: string) => {
     userSelectedSamplerRef.current = true;
     onTargetSamplerChange(samplerId);
+    restoreFocus();
   };
 
   // Perform Assignment
@@ -206,7 +272,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       subLocation,
       coords: resolvedCoords,
       ownerPhone,
-      company: 'Sigma sea foods',
+      company: detectedCompany || '',
       assignedSamplerId: sampler.id,
       rawMessage: inputText
     };
@@ -235,10 +301,16 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     setExtractedLocation('');
     setSubLocation('');
     setOwnerPhone('');
+    setFarmerCode('');
+    setCountTons('');
+    setRateSpecs('');
+    setHarvestDate('');
+    setDetectedCompany('');
     setResolvedCoords(null);
     setDistances([]);
     userSelectedSamplerRef.current = false;
     onLocationChange(null);
+    setTimeout(restoreFocus, 50);
   };
 
   const handleCopy = async () => {
@@ -342,11 +414,30 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
             </div>
           )}
 
-          {/* THE SINGLE INPUT BOX */}
+          {/* THE SINGLE INPUT BOX (Preserves focus across map interactions) */}
           <textarea
+            ref={textareaRef}
             rows={2}
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              cursorPosRef.current = {
+                start: e.target.selectionStart,
+                end: e.target.selectionEnd
+              };
+            }}
+            onSelect={(e) => {
+              const t = e.target as HTMLTextAreaElement;
+              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
+            }}
+            onClick={(e) => {
+              const t = e.target as HTMLTextAreaElement;
+              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
+            }}
+            onKeyUp={(e) => {
+              const t = e.target as HTMLTextAreaElement;
+              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
+            }}
             placeholder="Paste message, village name, or Google Maps link here..."
             className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-slate-400 bg-white resize-none font-medium leading-relaxed"
           />
@@ -372,6 +463,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
                     <button
                       key={item.sampler.id}
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelectSampler(item.sampler.id)}
                       className={`p-2 rounded-xl border text-left transition-all cursor-pointer relative ${
                         isSelected
@@ -410,6 +502,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
               {/* BIG ASSIGN BUTTON */}
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleAssign}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer transition-all mt-1"
               >

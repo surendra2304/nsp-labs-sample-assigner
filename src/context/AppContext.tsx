@@ -105,10 +105,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
   });
 
-  // Sample requests state
+  // Sample requests state (clean out any legacy test samples like GNR Kuppanapudi)
   const [requests, setRequests] = useState<SampleRequest[]>(() => {
     const saved = localStorage.getItem('nsp_requests');
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    try {
+      const parsed: SampleRequest[] = JSON.parse(saved);
+      return parsed.filter(
+        (r) =>
+          !(
+            r.farmerCode?.toLowerCase() === 'gnr' ||
+            r.locationName?.toLowerCase().includes('kuppanapudi')
+          )
+      );
+    } catch (e) {
+      return [];
+    }
   });
 
   // Settings state
@@ -303,6 +315,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAssignments: []
       }))
     );
+    setRequests([]);
+    localStorage.removeItem('nsp_requests');
   };
 
   const addCompany = (name: string, whatsappGroup?: string, groupInviteUrl?: string) => {
