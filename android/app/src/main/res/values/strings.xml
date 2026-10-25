@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NSP Labs Assigner</string>
+    <string name="title_activity_main">NSP Labs Assigner</string>
+    <string name="package_name">com.nsplabs.sampleassigner</string>
+    <string name="custom_url_scheme">com.nsplabs.sampleassigner</string>
+</resources>
