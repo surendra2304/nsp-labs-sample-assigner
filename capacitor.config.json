@@ -1,0 +1,9 @@
+{
+  "appId": "com.nsplabs.sampleassigner",
+  "appName": "NSP Labs Assigner",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
