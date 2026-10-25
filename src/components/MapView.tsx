@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { loadGoogleMaps } from '../services/googleMapsService';
-import type { Coordinates, Sampler } from '../types';
+import type { Coordinates } from '../types';
 import L from 'leaflet';
 import {
-  Navigation,
   Crosshair
 } from 'lucide-react';
 
 interface MapViewProps {
   onMapClick?: (coords: Coordinates) => void;
+  /** Fired ONLY on zoom (pinch, scroll wheel, +/- controls) — used to dismiss the mobile keyboard */
+  onMapZoom?: () => void;
   pendingCoords?: Coordinates | null;
   targetSamplerId?: string | null;
   onMapInteraction?: () => void;
@@ -21,6 +22,7 @@ const DEFAULT_MAP_ZOOM = 12;
 
 export const MapView: React.FC<MapViewProps> = ({
   onMapClick,
+  onMapZoom,
   pendingCoords,
   targetSamplerId,
   onMapInteraction
@@ -98,6 +100,8 @@ export const MapView: React.FC<MapViewProps> = ({
             // Keep focus when zooming in/out
             map.addListener('zoom_changed', () => {
               if (onMapInteraction) onMapInteraction();
+              // Zooming is a deliberate "look at the map" gesture: hide the keyboard
+              if (onMapZoom) onMapZoom();
             });
 
             // Keep focus when dragging map
@@ -141,6 +145,8 @@ export const MapView: React.FC<MapViewProps> = ({
 
         lMap.on('zoomend', () => {
           if (onMapInteraction) onMapInteraction();
+          // Zooming is a deliberate "look at the map" gesture: hide the keyboard
+          if (onMapZoom) onMapZoom();
         });
 
         lMap.on('moveend', () => {
@@ -154,7 +160,7 @@ export const MapView: React.FC<MapViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [engine, settings.googleMapsApiKey, onMapClick, onMapInteraction]);
+  }, [engine, settings.googleMapsApiKey, onMapClick, onMapZoom, onMapInteraction]);
 
   // Handle Map Type Change (Roadmap vs Hybrid)
   useEffect(() => {
@@ -162,20 +168,6 @@ export const MapView: React.FC<MapViewProps> = ({
       googleMapRef.current.setMapTypeId(mapType);
     }
   }, [mapType, engine]);
-
-  // Focus map on a specific sampler
-  const handlePanToSampler = (sampler: Sampler) => {
-    if (onMapInteraction) onMapInteraction();
-    if (engine === 'google' && googleMapRef.current) {
-      googleMapRef.current.panTo(sampler.currentLocation.coords);
-      googleMapRef.current.setZoom(13);
-    } else if (engine === 'leaflet' && leafletMapRef.current) {
-      leafletMapRef.current.setView(
-        [sampler.currentLocation.coords.lat, sampler.currentLocation.coords.lng],
-        13
-      );
-    }
-  };
 
   // Center on Bhimavaram or fit active points
   const handleCenterOrFit = useCallback(() => {

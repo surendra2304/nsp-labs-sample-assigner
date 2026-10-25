@@ -4,12 +4,14 @@ import { MapView } from './components/MapView';
 import { BottomDispatchBox } from './components/BottomDispatchBox';
 import { SamplerManagerModal } from './components/SamplerManagerModal';
 import { SettingsModal } from './components/SettingsModal';
+import { BatchAssignModal } from './components/BatchAssignModal';
 import type { Coordinates } from './types';
 import {
   FlaskConical,
   RotateCcw,
   Users,
-  Settings
+  Settings,
+  Route
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -18,6 +20,7 @@ const MainLayout: React.FC = () => {
   // Modals state
   const [isSamplersOpen, setIsSamplersOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
 
   // Synchronized map coordinates & target highlight
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
@@ -25,13 +28,25 @@ const MainLayout: React.FC = () => {
 
   // Ref to hold the textarea focus restore function
   const focusRestoreRef = useRef<() => void>(() => {});
+  // Ref to hold the "dismiss keyboard" function (fired on map zoom)
+  const blurRestoreRef = useRef<() => void>(() => {});
 
   const handleRegisterFocus = useCallback((fn: () => void) => {
     focusRestoreRef.current = fn;
   }, []);
 
+  const handleRegisterBlur = useCallback((fn: () => void) => {
+    blurRestoreRef.current = fn;
+  }, []);
+
+  // A plain map tap/drag keeps the cursor (and keyboard) where it was
   const handleMapInteraction = useCallback(() => {
     focusRestoreRef.current();
+  }, []);
+
+  // Zooming in/out is a deliberate "let me look at the map" gesture → hide the keyboard
+  const handleMapZoom = useCallback(() => {
+    blurRestoreRef.current();
   }, []);
 
   return (
@@ -44,6 +59,7 @@ const MainLayout: React.FC = () => {
           onMapClick={(coords) => {
             setPendingCoords(coords);
           }}
+          onMapZoom={handleMapZoom}
           onMapInteraction={handleMapInteraction}
         />
       </div>
@@ -94,6 +110,17 @@ const MainLayout: React.FC = () => {
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setIsBatchOpen(true)}
+            className="px-2.5 py-1 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+            title="Batch Multi-Sample Route Optimizer (TSP / VRP)"
+          >
+            <Route className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-[11px] hidden min-[400px]:inline">Batch</span>
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsSettingsOpen(true)}
             className="p-1.5 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
             title="Settings & Data Backup / Export / Import"
@@ -111,6 +138,7 @@ const MainLayout: React.FC = () => {
             onTargetSamplerChange={(samplerId) => setTargetSamplerId(samplerId)}
             targetSamplerId={targetSamplerId}
             onRegisterFocusHandler={handleRegisterFocus}
+            onRegisterBlurHandler={handleRegisterBlur}
           />
         </div>
       </div>
@@ -125,6 +153,12 @@ const MainLayout: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Batch Multi-Sample Route Optimizer Modal */}
+      <BatchAssignModal
+        isOpen={isBatchOpen}
+        onClose={() => setIsBatchOpen(false)}
       />
     </div>
   );

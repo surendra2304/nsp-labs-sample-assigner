@@ -20,6 +20,8 @@ interface BottomDispatchBoxProps {
   onTargetSamplerChange: (samplerId: string | null) => void;
   targetSamplerId: string | null;
   onRegisterFocusHandler?: (fn: () => void) => void;
+  /** Registers the "hide the keyboard" handler (called on map zoom) */
+  onRegisterBlurHandler?: (fn: () => void) => void;
 }
 
 interface SamplerDist {
@@ -32,7 +34,8 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   onLocationChange,
   onTargetSamplerChange,
   targetSamplerId,
-  onRegisterFocusHandler
+  onRegisterFocusHandler,
+  onRegisterBlurHandler
 }) => {
   const { samplers, createAndAssignSample } = useApp();
 
@@ -43,8 +46,14 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cursorPosRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
 
+  // Tracks whether the textarea is genuinely focused (i.e. the mobile keyboard is up).
+  // Map taps only re-focus when the keyboard was ALREADY up — so a zoom that dismissed
+  // the keyboard does not pop it back open on the next map tap.
+  const isFocusedRef = useRef(false);
+
   // Expose focus restore function to parent so any map click/zoom restores focus without scrolling
   const restoreFocus = useCallback(() => {
+    if (!isFocusedRef.current) return;
     if (textareaRef.current) {
       textareaRef.current.focus({ preventScroll: true });
       try {
@@ -54,11 +63,22 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     }
   }, []);
 
+  // Dismiss the soft keyboard (used when the user zooms the map to inspect a pond)
+  const dismissKeyboard = useCallback(() => {
+    isFocusedRef.current = false;
+    if (textareaRef.current && document.activeElement === textareaRef.current) {
+      textareaRef.current.blur();
+    }
+  }, []);
+
   useEffect(() => {
     if (onRegisterFocusHandler) {
       onRegisterFocusHandler(restoreFocus);
     }
-  }, [onRegisterFocusHandler, restoreFocus]);
+    if (onRegisterBlurHandler) {
+      onRegisterBlurHandler(dismissKeyboard);
+    }
+  }, [onRegisterFocusHandler, onRegisterBlurHandler, restoreFocus, dismissKeyboard]);
 
   // Extracted details
   const [extractedLocation, setExtractedLocation] = useState('');
@@ -343,7 +363,11 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     setSuggestions([]);
     userSelectedSamplerRef.current = false;
     onLocationChange(null);
-    setTimeout(restoreFocus, 50);
+    // "+ Next Sample" is a deliberate continuation of typing, so bring the keyboard back
+    setTimeout(() => {
+      isFocusedRef.current = true;
+      restoreFocus();
+    }, 50);
   };
 
   const handleCopy = async () => {
@@ -470,6 +494,12 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
             onKeyUp={(e) => {
               const t = e.target as HTMLTextAreaElement;
               cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
+            }}
+            onFocus={() => {
+              isFocusedRef.current = true;
+            }}
+            onBlur={() => {
+              isFocusedRef.current = false;
             }}
             placeholder="Paste message, village name, or Google Maps link here..."
             className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-slate-400 bg-white resize-none font-medium leading-relaxed"
