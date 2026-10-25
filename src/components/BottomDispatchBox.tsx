@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { parseCompanyMessage } from '../utils/messageParser';
 import { formatWhatsAppDispatchMessage, sendViaWhatsApp, copyTextToClipboard } from '../utils/dispatchFormatter';
 import { calculateRoadDistance, geocodePlace } from '../services/googleMapsService';
-import { findKnownHubCoordinates, parseLocationFromGoogleMapsString } from '../utils/geoUtils';
+import { findKnownHubCoordinates, parseLocationFromGoogleMapsString, getVillageSuggestions } from '../utils/geoUtils';
 import type { Coordinates, Sampler, SampleRequest } from '../types';
 import {
   Phone,
@@ -71,6 +71,9 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const [detectedCompany, setDetectedCompany] = useState('');
   const [resolvedCoords, setResolvedCoords] = useState<Coordinates | null>(null);
 
+  // Autocomplete suggestions
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
   // Proximity calculations
   const [distances, setDistances] = useState<SamplerDist[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -89,6 +92,14 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   // Parse input whenever text changes, with strict debounce & min length validation!
   useEffect(() => {
     const text = inputText.trim();
+
+    // Autocomplete suggestions
+    if (text.length >= 1 && !text.includes('\n') && !text.startsWith('http')) {
+      const list = getVillageSuggestions(text);
+      setSuggestions(list);
+    } else {
+      setSuggestions([]);
+    }
 
     // 1. If text is empty: clear everything immediately
     if (!text) {
@@ -250,6 +261,27 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     };
   }, [resolvedCoords, samplers, onTargetSamplerChange]);
 
+  // Handle village autocomplete selection
+  const handleSelectSuggestion = (villageName: string) => {
+    setInputText(villageName);
+    setSuggestions([]);
+    const hub = findKnownHubCoordinates(villageName);
+    if (hub) {
+      setExtractedLocation(villageName);
+      setResolvedCoords(hub);
+      onLocationChange(hub);
+    } else {
+      geocodePlace(villageName).then((c) => {
+        if (c) {
+          setExtractedLocation(villageName);
+          setResolvedCoords(c);
+          onLocationChange(c);
+        }
+      });
+    }
+    restoreFocus();
+  };
+
   // When user clicks a specific sampler, lock their choice and do NOT let auto-calculation override!
   const handleSelectSampler = (samplerId: string) => {
     userSelectedSamplerRef.current = true;
@@ -308,6 +340,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     setDetectedCompany('');
     setResolvedCoords(null);
     setDistances([]);
+    setSuggestions([]);
     userSelectedSamplerRef.current = false;
     onLocationChange(null);
     setTimeout(restoreFocus, 50);
@@ -441,6 +474,25 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
             placeholder="Paste message, village name, or Google Maps link here..."
             className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-slate-400 bg-white resize-none font-medium leading-relaxed"
           />
+
+          {/* AUTOCOMPLETE SUGGESTION CHIPS (e.g. typing NAR -> Narasapuram, BHI -> Bhimavaram) */}
+          {suggestions.length > 0 && !assignedResult && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5 animate-in fade-in duration-100">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Suggested:</span>
+              {suggestions.map((village) => (
+                <button
+                  key={village}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelectSuggestion(village)}
+                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                >
+                  <span>📍</span>
+                  <span>{village}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* SAMPLERS LIST WITH DISTANCES */}
           {distances.length > 0 && (

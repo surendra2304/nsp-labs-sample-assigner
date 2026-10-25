@@ -15,9 +15,6 @@ import {
   Navigation,
   Pencil,
   Check,
-  Copy,
-  Download,
-  Upload,
   Palette
 } from 'lucide-react';
 
@@ -54,7 +51,6 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
   const {
     samplers,
     updateSampler,
-    setAllSamplers,
     updateSamplerLocation,
     addSampler,
     deleteSampler,
@@ -62,10 +58,6 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
   } = useApp();
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showSyncPanel, setShowSyncPanel] = useState(false);
-  const [copiedSync, setCopiedSync] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
-  const [importError, setImportError] = useState('');
 
   // New Sampler Form State
   const [newName, setNewName] = useState('');
@@ -200,31 +192,6 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
     setShowAddForm(false);
   };
 
-  // Export samplers to JSON
-  const handleExportConfig = () => {
-    const dataStr = JSON.stringify(samplers, null, 2);
-    navigator.clipboard.writeText(dataStr);
-    setCopiedSync(true);
-    setTimeout(() => setCopiedSync(false), 2500);
-  };
-
-  // Import samplers from JSON
-  const handleImportConfig = () => {
-    setImportError('');
-    try {
-      const parsed = JSON.parse(importJsonText);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name && parsed[0].homeBase) {
-        setAllSamplers(parsed);
-        setShowSyncPanel(false);
-        setImportJsonText('');
-      } else {
-        setImportError('Invalid format. Must be an array of samplers.');
-      }
-    } catch (err) {
-      setImportError('Invalid JSON. Please paste valid configuration text.');
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92dvh] flex flex-col">
@@ -250,26 +217,15 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
         </div>
 
         {/* Global Action Bar */}
-        <div className="p-3 bg-blue-50/70 border-b border-blue-100 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={resetAllSamplersToHome}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-white border border-blue-200 rounded-xl hover:bg-blue-50 shadow-xs cursor-pointer active:scale-[0.98]"
-              title="Reset all samplers back to home towns (Start of day)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
-              <span>🌅 Morning Reset</span>
-            </button>
-
-            <button
-              onClick={() => setShowSyncPanel(!showSyncPanel)}
-              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-xs cursor-pointer active:scale-[0.98]"
-              title="Share or backup sampler configuration"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Sync / Share</span>
-            </button>
-          </div>
+        <div className="p-3 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between gap-2">
+          <button
+            onClick={resetAllSamplersToHome}
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-white border border-blue-200 rounded-xl hover:bg-blue-50 shadow-xs cursor-pointer active:scale-[0.98]"
+            title="Reset all samplers back to home towns (Start of day)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+            <span>🌅 Morning Reset</span>
+          </button>
 
           <button
             onClick={() => {
@@ -282,42 +238,6 @@ export const SamplerManagerModal: React.FC<SamplerManagerModalProps> = ({ isOpen
             <span>{showAddForm ? 'Cancel' : '+ Add Sampler'}</span>
           </button>
         </div>
-
-        {/* Share / Sync Panel (Export / Import JSON) */}
-        {showSyncPanel && (
-          <div className="p-3.5 bg-amber-50/80 border-b border-amber-200 space-y-2.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-800">📋 Transfer Setup Between Phones & Laptop</span>
-              <button
-                onClick={handleExportConfig}
-                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg flex items-center gap-1 text-[11px] cursor-pointer"
-              >
-                {copiedSync ? <Check className="w-3 h-3 text-white" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedSync ? 'Copied to Clipboard!' : 'Copy Samplers Config'}</span>
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-600">
-              You can configure the samplers once here, click <b>Copy Samplers Config</b>, and paste it into your father's phone so he doesn't have to type anything.
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Or paste config JSON here to import on this device..."
-                value={importJsonText}
-                onChange={(e) => setImportJsonText(e.target.value)}
-                className="flex-1 p-2 bg-white border border-amber-300 rounded-lg outline-none text-xs"
-              />
-              <button
-                onClick={handleImportConfig}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg flex items-center gap-1 text-xs cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Import</span>
-              </button>
-            </div>
-            {importError && <p className="text-[11px] text-red-600 font-bold">{importError}</p>}
-          </div>
-        )}
 
         {/* Add Sampler Form */}
         {showAddForm && (

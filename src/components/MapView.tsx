@@ -332,9 +332,20 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       });
 
-      // 3. Pending Target Pond Pin (Draggable)
+      // 3. Pending Target Pond Pin (Draggable, with DROP animation on every new location)
       if (pendingCoords && pendingCoords.lat && pendingCoords.lng) {
-        if (!googlePendingMarkerRef.current) {
+        const prevPos = googlePendingMarkerRef.current?.getPosition();
+        const isNewLocation =
+          !prevPos ||
+          Math.abs(prevPos.lat() - pendingCoords.lat) > 0.0001 ||
+          Math.abs(prevPos.lng() - pendingCoords.lng) > 0.0001;
+
+        if (isNewLocation) {
+          if (googlePendingMarkerRef.current) {
+            googlePendingMarkerRef.current.setMap(null);
+            googlePendingMarkerRef.current = null;
+          }
+
           const pMarker = new g.maps.Marker({
             position: pendingCoords,
             map,
@@ -364,12 +375,11 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           googlePendingMarkerRef.current = pMarker;
-        } else {
-          googlePendingMarkerRef.current.setPosition(pendingCoords);
-          googlePendingMarkerRef.current.setMap(map);
+          map.panTo(pendingCoords);
         }
       } else if (googlePendingMarkerRef.current) {
         googlePendingMarkerRef.current.setMap(null);
+        googlePendingMarkerRef.current = null;
       }
     }
   }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick, onMapInteraction]);
@@ -421,41 +431,6 @@ export const MapView: React.FC<MapViewProps> = ({
         onPointerUp={() => onMapInteraction?.()}
         onTouchEnd={() => onMapInteraction?.()}
       />
-
-      {/* Top Left Sampler Status Badges (Underneath top header) */}
-      <div className="absolute top-14 left-3 z-10 flex flex-wrap items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs text-white">
-        <div className="flex items-center gap-1 font-bold text-slate-300 px-1">
-          <Navigation className="w-3.5 h-3.5 text-blue-400" />
-          <span className="hidden sm:inline">Samplers:</span>
-        </div>
-
-        {samplers.map((sampler) => {
-          const isTarget = targetSamplerId === sampler.id;
-          return (
-            <button
-              key={sampler.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => handlePanToSampler(sampler)}
-              title={`Click to pan to ${sampler.name}`}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border font-medium transition-all cursor-pointer ${
-                isTarget
-                  ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-2 ring-blue-400/50'
-                  : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
-              }`}
-            >
-              <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: sampler.color }}
-              />
-              <span className="font-bold">{sampler.name}</span>
-              <span className="text-[10px] text-slate-300 bg-slate-700/70 px-1 py-0.5 rounded font-mono">
-                {sampler.currentLocation.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Top Right Controls: Satellite toggle / Center on Bhimavaram */}
       <div className="absolute top-14 right-3 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">

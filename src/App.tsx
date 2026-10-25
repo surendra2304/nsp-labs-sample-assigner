@@ -3,18 +3,21 @@ import { AppProvider, useApp } from './context/AppContext';
 import { MapView } from './components/MapView';
 import { BottomDispatchBox } from './components/BottomDispatchBox';
 import { SamplerManagerModal } from './components/SamplerManagerModal';
+import { SettingsModal } from './components/SettingsModal';
 import type { Coordinates } from './types';
 import {
   FlaskConical,
   RotateCcw,
-  Users
+  Users,
+  Settings
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { resetAllSamplersToHome } = useApp();
 
-  // Sampler Manager modal state
+  // Modals state
   const [isSamplersOpen, setIsSamplersOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Synchronized map coordinates & target highlight
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
@@ -87,6 +90,16 @@ const MainLayout: React.FC = () => {
             <Users className="w-3.5 h-3.5 text-blue-400" />
             <span className="text-[11px]">Samplers</span>
           </button>
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1.5 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+            title="Settings & Data Backup / Export / Import"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-300" />
+          </button>
         </div>
       </header>
 
@@ -106,6 +119,12 @@ const MainLayout: React.FC = () => {
       <SamplerManagerModal
         isOpen={isSamplersOpen}
         onClose={() => setIsSamplersOpen(false)}
+      />
+
+      {/* Settings & Data Import/Export Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );

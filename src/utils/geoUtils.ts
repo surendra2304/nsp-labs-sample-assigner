@@ -124,26 +124,65 @@ export function findKnownHubCoordinates(name: string): Coordinates | null {
   return null;
 }
 
+const CANONICAL_VILLAGES = [
+  'Bhimavaram',
+  'Narasapuram',
+  'Palakol',
+  'Mogalthuru',
+  'Vempa',
+  'Undi',
+  'Kalla',
+  'Kuppanapudi',
+  'Sesali',
+  'Akividu',
+  'Tanuku',
+  'Veeravasaram',
+  'Penumantra',
+  'Pippara',
+  'Attili',
+  'Maruteru',
+  'Peravali',
+  'Gollalakoderu',
+  'Yenamadurru',
+  'Dindi',
+  'Elurupadu',
+  'Chinakapavaram',
+  'Pedakapavaram',
+  'Juvvalapalem',
+  'Biyyaputhippa',
+  'Perupalem',
+  'Kaza',
+  'Matsyapuri',
+  'Achanta',
+  'Poduru',
+  'Penugonda',
+  'Chinchinada'
+];
+
 /**
- * Autocomplete suggestions for villages
+ * Autocomplete suggestions for villages - prioritizes exact prefix matches
  */
-export function getVillageSuggestions(query: string, maxResults = 6): string[] {
+export function getVillageSuggestions(query: string, maxResults = 5): string[] {
   if (!query || query.trim().length < 1) return [];
   const q = query.trim().toLowerCase();
 
-  const results: string[] = [];
-  for (const key of Object.keys(REGIONAL_AQUACULTURE_HUBS)) {
-    if (key.startsWith(q) || key.includes(q)) {
-      // Capitalize first letter
-      const capitalized = key.charAt(0).toUpperCase() + key.slice(1);
-      if (!results.includes(capitalized)) {
-        results.push(capitalized);
-      }
-      if (results.length >= maxResults) break;
-    }
+  // If query is a multi-line message or link, do not show single-word village suggestions
+  if (q.includes('\n') || q.includes('http') || q.includes('maps.google')) {
+    return [];
   }
 
-  return results;
+  // 1. First priority: starts with query
+  const startsWith = CANONICAL_VILLAGES.filter((v) => v.toLowerCase().startsWith(q));
+  if (startsWith.length >= maxResults) {
+    return startsWith.slice(0, maxResults);
+  }
+
+  // 2. Second priority: contains query
+  const contains = CANONICAL_VILLAGES.filter(
+    (v) => !v.toLowerCase().startsWith(q) && v.toLowerCase().includes(q)
+  );
+
+  return [...startsWith, ...contains].slice(0, maxResults);
 }
 
 /**
