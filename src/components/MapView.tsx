@@ -27,7 +27,7 @@ export const MapView: React.FC<MapViewProps> = ({
   targetSamplerId,
   onMapInteraction
 }) => {
-  const { samplers, requests, settings, setSelectedRequest, deleteSampleRequest } = useApp();
+  const { samplers, requests, settings, deleteSampleRequest } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // Map Engine state: defaults to 'google'
@@ -302,7 +302,6 @@ export const MapView: React.FC<MapViewProps> = ({
 
           marker.addListener('click', () => {
             if (onMapInteraction) onMapInteraction();
-            setSelectedRequest(req);
             const info = new g.maps.InfoWindow({
               content: `
                 <div style="font-family: sans-serif; padding: 4px; max-width: 200px;">
@@ -374,7 +373,7 @@ export const MapView: React.FC<MapViewProps> = ({
         googlePendingMarkerRef.current = null;
       }
     }
-  }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick, onMapInteraction]);
+  }, [engine, samplers, requests, pendingCoords, targetSamplerId, onMapClick, onMapInteraction]);
 
   // ROUTE LINES: Draw route between target sampler and pending pond
   useEffect(() => {

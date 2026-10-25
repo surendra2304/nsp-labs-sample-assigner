@@ -5,22 +5,25 @@ import { BottomDispatchBox } from './components/BottomDispatchBox';
 import { SamplerManagerModal } from './components/SamplerManagerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BatchAssignModal } from './components/BatchAssignModal';
+import { TodaySamplesModal } from './components/TodaySamplesModal';
 import type { Coordinates } from './types';
 import {
   FlaskConical,
   RotateCcw,
   Users,
   Settings,
-  Route
+  Route,
+  ClipboardList
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { resetAllSamplersToHome } = useApp();
+  const { resetAllSamplersToHome, requests } = useApp();
 
   // Modals state
   const [isSamplersOpen, setIsSamplersOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [isTodayOpen, setIsTodayOpen] = useState(false);
 
   // Synchronized map coordinates & target highlight
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
@@ -110,6 +113,22 @@ const MainLayout: React.FC = () => {
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setIsTodayOpen(true)}
+            className="relative px-2.5 py-1 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+            title="Today's Samples (re-send WhatsApp, mark collected, remove)"
+          >
+            <ClipboardList className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-[11px] hidden min-[400px]:inline">Today</span>
+            {requests.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 bg-emerald-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-sm">
+                {requests.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsBatchOpen(true)}
             className="px-2.5 py-1 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
             title="Batch Multi-Sample Route Optimizer (TSP / VRP)"
@@ -153,6 +172,12 @@ const MainLayout: React.FC = () => {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Today's Samples Modal */}
+      <TodaySamplesModal
+        isOpen={isTodayOpen}
+        onClose={() => setIsTodayOpen(false)}
       />
 
       {/* Batch Multi-Sample Route Optimizer Modal */}

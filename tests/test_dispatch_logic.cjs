@@ -1,29 +1,39 @@
+/**
+ * NSP Labs Sample Assigner — logic tests
+ *
+ * These run against the REAL src/*.ts modules (transpiled on the fly by
+ * ./ts-require.cjs) rather than copy-pasted implementations, so a regression in
+ * the app's parsing, distance or dispatch code actually fails the suite.
+ *
+ * Run: node tests/test_dispatch_logic.cjs
+ */
 const assert = require('assert');
 
-// 1. Regional Hubs
-const REGIONAL_AQUACULTURE_HUBS = {
-  'bhimavaram': { lat: 16.5449, lng: 81.5212 },
-  'narasapuram': { lat: 16.4410, lng: 81.7011 },
-  'palakol': { lat: 16.5167, lng: 81.7333 },
-  'mogalthuru': { lat: 16.4178, lng: 81.5947 },
-  'vempa': { lat: 16.4950, lng: 81.5650 },
-  'undi': { lat: 16.5919, lng: 81.4644 },
-  'kalla': { lat: 16.5408, lng: 81.4425 },
-  'kuppanapudi': { lat: 16.5144, lng: 81.4286 }
-};
+const { geoUtils, messageParser, dispatchFormatter } = require('./ts-require.cjs');
 
-function calculateHaversineDistanceKm(p1, p2) {
-  const R = 6371;
-  const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
-  const dLng = ((p2.lng - p1.lng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((p1.lat * Math.PI) / 180) *
-      Math.cos((p2.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Number((R * c * 1.25).toFixed(1));
+const {
+  REGIONAL_AQUACULTURE_HUBS,
+  calculateHaversineDistanceKm,
+  estimateDrivingTimeMinutes,
+  findKnownHubCoordinates,
+  getVillageSuggestions,
+  parseNumericTonnage,
+  parseLocationFromGoogleMapsString
+} = geoUtils;
+
+const { parseCompanyMessage, parseMultipleCompanyMessages } = messageParser;
+const { formatWhatsAppDispatchMessage } = dispatchFormatter;
+
+let passed = 0;
+function test(name, fn) {
+  try {
+    fn();
+    passed++;
+    console.log(`  ✅ ${name}`);
+  } catch (err) {
+    console.error(`  ❌ ${name}\n     ${err.message}`);
+    process.exitCode = 1;
+  }
 }
 
 console.log('--- TEST 1: Distance Checks ---');
@@ -37,68 +47,174 @@ const distNarasapuramToKuppanapudi = calculateHaversineDistanceKm(
 );
 console.log(`Bhimavaram to Kuppanapudi: ${distBhimavaramToKuppanapudi} km`);
 console.log(`Narasapuram to Kuppanapudi: ${distNarasapuramToKuppanapudi} km`);
-assert(distBhimavaramToKuppanapudi < distNarasapuramToKuppanapudi, 'Bhimavaram should be nearer to Kuppanapudi than Narasapuram');
+test('Bhimavaram is nearer to Kuppanapudi than Narasapuram', () => {
+  assert(distBhimavaramToKuppanapudi < distNarasapuramToKuppanapudi);
+});
+test('Driving estimate is at least 5 minutes and scales with distance', () => {
+  const t = estimateDrivingTimeMinutes(10);
+  assert(t >= 5, `expected >= 5, got ${t}`);
+  assert(estimateDrivingTimeMinutes(100) > t);
+});
 
 console.log('--- TEST 2: Dynamic Location Movement ---');
-// Step A: Ramesh starts at Bhimavaram, Suresh at Narasapuram, Naidu at Palakol
+// Ramesh starts at Bhimavaram, Suresh at Narasapuram, Naidu at Palakol
 let rameshLoc = { ...REGIONAL_AQUACULTURE_HUBS['bhimavaram'] };
-let sureshLoc = { ...REGIONAL_AQUACULTURE_HUBS['narasapuram'] };
-let naiduLoc = { ...REGIONAL_AQUACULTURE_HUBS['palakol'] };
+const sureshLoc = { ...REGIONAL_AQUACULTURE_HUBS['narasapuram'] };
+const naiduLoc = { ...REGIONAL_AQUACULTURE_HUBS['palakol'] };
 
-// Step B: Sample 1 at Kuppanapudi is assigned to Ramesh
-// Ramesh's location moves to Kuppanapudi!
+// Sample 1 at Kuppanapudi is assigned to Ramesh -> his location moves there
 rameshLoc = { ...REGIONAL_AQUACULTURE_HUBS['kuppanapudi'] };
 console.log(`Ramesh assigned to Kuppanapudi. New position: ${rameshLoc.lat}, ${rameshLoc.lng}`);
 
-// Step C: Sample 2 at Vempa comes in! Who is closer?
 const rameshToVempa = calculateHaversineDistanceKm(rameshLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
 const sureshToVempa = calculateHaversineDistanceKm(sureshLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
 const naiduToVempa = calculateHaversineDistanceKm(naiduLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
+console.log(`Ramesh: ${rameshToVempa} km | Suresh: ${sureshToVempa} km | Naidu: ${naiduToVempa} km`);
 
-console.log(`Ramesh (from Kuppanapudi) to Vempa: ${rameshToVempa} km`);
-console.log(`Suresh (from Narasapuram) to Vempa: ${sureshToVempa} km`);
-console.log(`Naidu (from Palakol) to Vempa: ${naiduToVempa} km`);
-
-assert(rameshToVempa < sureshToVempa, 'Ramesh at Kuppanapudi must be closer to Vempa than Suresh at Narasapuram');
-assert(rameshToVempa < naiduToVempa, 'Ramesh at Kuppanapudi must be closer to Vempa than Naidu at Palakol');
-console.log('✅ Dynamic location movement test passed 100%!');
+test('Ramesh at Kuppanapudi is nearest to Vempa', () => {
+  assert(rameshToVempa < sureshToVempa, 'Ramesh must be closer than Suresh');
+  assert(rameshToVempa < naiduToVempa, 'Ramesh must be closer than Naidu');
+});
 
 console.log('--- TEST 3: WhatsApp Dispatch Format ---');
-function formatWhatsAppDispatchMessage(sample, samplerName) {
-  const lines = [];
-  lines.push(`@${samplerName.trim()}`);
-  lines.push(`*${sample.company.trim()}*`);
-  lines.push(sample.farmerCode.trim());
-  lines.push(sample.countTons.trim());
-  if (sample.subLocation && sample.subLocation.trim().length > 0) {
-    lines.push(`${sample.locationName.trim()},(${sample.subLocation.trim()})`);
-  } else {
-    lines.push(sample.locationName.trim());
-  }
-  if (sample.ownerPhone) {
-    lines.push(sample.ownerPhone.trim());
-  }
-  if (sample.altContactPhone || sample.altContactName) {
-    const contactParts = [sample.altContactName?.trim(), sample.altContactPhone?.trim()].filter(Boolean);
-    if (contactParts.length > 0) {
-      lines.push(contactParts.join(' '));
-    }
-  }
-  return lines.join('\n');
+function buildSample(overrides = {}) {
+  return {
+    id: 'req-1',
+    harvestDate: '26/10/26',
+    farmerCode: 'Gnr',
+    countTons: '90c-2tons',
+    rateSpecs: '255+',
+    locationName: 'Kuppanapudi',
+    subLocation: 'konalapalli',
+    coords: { lat: 16.5144, lng: 81.4286 },
+    ownerPhone: '+919014747367',
+    altContactName: 'Madhu',
+    altContactPhone: '9032259499',
+    company: 'Sigma sea foods',
+    status: 'assigned',
+    createdAt: '2026-10-26T00:00:00.000Z',
+    ...overrides
+  };
 }
 
-const expectedOutput = `@Ramesh\n*Sigma sea foods*\nGnr\n90c-2tons\nKuppanapudi,(konalapalli)\n+919014747367\nMadhu 9032259499`;
-const testSample = {
-  company: 'Sigma sea foods',
-  farmerCode: 'Gnr',
-  countTons: '90c-2tons',
-  locationName: 'Kuppanapudi',
-  subLocation: 'konalapalli',
-  ownerPhone: '+919014747367',
-  altContactName: 'Madhu',
-  altContactPhone: '9032259499'
-};
+test('Dispatch message matches the expected format exactly', () => {
+  const expected =
+    '@Ramesh\n*Sigma sea foods*\nGnr\n90c-2tons\nKuppanapudi,(konalapalli)\n+919014747367\nMadhu 9032259499';
+  assert.strictEqual(formatWhatsAppDispatchMessage(buildSample(), 'Ramesh'), expected);
+});
 
-const actualOutput = formatWhatsAppDispatchMessage(testSample, 'Ramesh');
-assert.strictEqual(actualOutput, expectedOutput);
-console.log('✅ WhatsApp message format matches 100%!');
+test('Dispatch message drops the "General"/"Standard" placeholders', () => {
+  const text = formatWhatsAppDispatchMessage(
+    buildSample({ farmerCode: 'General', countTons: 'Standard', altContactName: undefined, altContactPhone: undefined }),
+    'Suresh'
+  );
+  assert.strictEqual(text, '@Suresh\n*Sigma sea foods*\nKuppanapudi,(konalapalli)\n+919014747367');
+});
+
+test('Dispatch message appends a Maps link when requested', () => {
+  const text = formatWhatsAppDispatchMessage(buildSample(), 'Naidu', true);
+  assert(text.includes('📍 Maps: https://www.google.com/maps?q=16.5144,81.4286'));
+});
+
+test('Dispatch message has no sub-location parentheses when none given', () => {
+  const text = formatWhatsAppDispatchMessage(buildSample({ subLocation: undefined }), 'Ramesh');
+  assert(text.includes('\nKuppanapudi\n'), 'location should be a bare line');
+  assert(!text.includes('('), 'no parentheses expected');
+});
+
+console.log('--- TEST 4: Message Parser (real src/utils/messageParser.ts) ---');
+const README_MESSAGE = 'Harvest date 26/10/26\nGnr\n90c-2tons\n255+\nKuppanapudi\n+919014747367';
+
+test('Parses the README example message', () => {
+  const p = parseCompanyMessage(README_MESSAGE);
+  assert.strictEqual(p.harvestDate, '26/10/26');
+  assert.strictEqual(p.farmerCode, 'Gnr');
+  assert.strictEqual(p.countTons, '90c-2tons');
+  assert.strictEqual(p.rateSpecs, '255+');
+  assert.strictEqual(p.locationName, 'Kuppanapudi');
+  assert.strictEqual(p.ownerPhone, '+919014747367');
+  assert.strictEqual(p.tonnageNumber, 2);
+});
+
+test('Resolves known hub coordinates without any network call', () => {
+  const p = parseCompanyMessage(README_MESSAGE);
+  assert.deepStrictEqual(p.coords, REGIONAL_AQUACULTURE_HUBS['kuppanapudi']);
+});
+
+test('Extracts a sub-location in parentheses', () => {
+  const p = parseCompanyMessage('Harvest date 26/10/26\nGnr\n90c-2tons\nKuppanapudi,(konalapalli)\n+919014747367');
+  assert.strictEqual(p.locationName, 'Kuppanapudi');
+  assert.strictEqual(p.subLocation, 'konalapalli');
+});
+
+test('Defaults the harvest date to today when missing', () => {
+  const p = parseCompanyMessage('Gnr\n90c-2tons\nVempa\n9703051223');
+  const today = new Date();
+  const expected = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getFullYear()).slice(-2)}`;
+  assert.strictEqual(p.harvestDate, expected);
+});
+
+test('Never returns a location-less sample (falls back to Bhimavaram)', () => {
+  const p = parseCompanyMessage('Gnr\n90c-2tons\n9703051223');
+  assert(p.coords && p.coords.lat, 'coords must always be present for the map');
+});
+
+test('Splits a 5-message bulk blast into 5 samples', () => {
+  const bulk = [
+    'Harvest date 26/10/26\nGnr\n90c-2tons\n255+\nNarasapuram\n+919014747367',
+    'Harvest date 26/10/26\nGnr\n80c-6tons\n290+\nMogalthuru\n9703051223',
+    'Harvest date 26/10/26\nGnr\n70c-3tons\n270+\nVempa\n9848011223',
+    'Harvest date 26/10/26\nGnr\n100c-4tons\n240+\nBhimavaram\n9440123456',
+    'Harvest date 26/10/26\nGnr\n85c-5tons\n285+\nUndi\n9988776655'
+  ].join('\n\n');
+  const items = parseMultipleCompanyMessages(bulk);
+  assert.strictEqual(items.length, 5, `expected 5, got ${items.length}`);
+  assert.deepStrictEqual(
+    items.map((i) => i.locationName),
+    ['Narasapuram', 'Mogalthuru', 'Vempa', 'Bhimavaram', 'Undi']
+  );
+});
+
+console.log('--- TEST 5: Geo helpers ---');
+test('parseNumericTonnage handles every company phrasing', () => {
+  assert.strictEqual(parseNumericTonnage('90c-2tons'), 2);
+  assert.strictEqual(parseNumericTonnage('80c - 6.5 tons'), 6.5);
+  assert.strictEqual(parseNumericTonnage('100c-3tons'), 3);
+  assert.strictEqual(parseNumericTonnage('no tonnage here'), 0);
+  assert.strictEqual(parseNumericTonnage(''), 0);
+});
+
+test('findKnownHubCoordinates is case/spacing insensitive', () => {
+  assert.deepStrictEqual(findKnownHubCoordinates('  KUPPANAPUDI '), REGIONAL_AQUACULTURE_HUBS['kuppanapudi']);
+  assert.deepStrictEqual(findKnownHubCoordinates('Vempa'), REGIONAL_AQUACULTURE_HUBS['vempa']);
+  assert.strictEqual(findKnownHubCoordinates('Atlantis'), null);
+});
+
+test('Village autocomplete prioritises prefix matches', () => {
+  const s = getVillageSuggestions('nar');
+  assert(s[0] === 'Narasapuram', `expected Narasapuram first, got ${s[0]}`);
+  assert(s.length <= 5);
+});
+
+test('Village autocomplete stays quiet for pasted messages and links', () => {
+  assert.deepStrictEqual(getVillageSuggestions('Harvest date 26/10/26\nGnr'), []);
+  assert.deepStrictEqual(getVillageSuggestions('https://maps.app.goo.gl/xyz'), []);
+  assert.deepStrictEqual(getVillageSuggestions(''), []);
+});
+
+test('Google Maps link parsing extracts coordinates', () => {
+  const raw = parseLocationFromGoogleMapsString('16.5144, 81.4286');
+  assert.deepStrictEqual(raw.coords, { lat: 16.5144, lng: 81.4286 });
+
+  const q = parseLocationFromGoogleMapsString('https://www.google.com/maps?q=16.5144,81.4286');
+  assert.deepStrictEqual(q.coords, { lat: 16.5144, lng: 81.4286 });
+
+  const at = parseLocationFromGoogleMapsString('https://www.google.com/maps/@16.5144,81.4286,17z');
+  assert.deepStrictEqual(at.coords, { lat: 16.5144, lng: 81.4286 });
+
+  const short = parseLocationFromGoogleMapsString('https://maps.app.goo.gl/abc123');
+  assert.strictEqual(short.coords, undefined, 'short links carry no coords');
+  assert.strictEqual(short.rawUrl, 'https://maps.app.goo.gl/abc123');
+});
+
+console.log(`\n${passed} checks passed${process.exitCode ? ' (with failures)' : ''}`);

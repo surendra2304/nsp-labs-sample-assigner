@@ -90,6 +90,8 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const [rateSpecs, setRateSpecs] = useState('');
   const [detectedCompany, setDetectedCompany] = useState('');
   const [resolvedCoords, setResolvedCoords] = useState<Coordinates | null>(null);
+  // The raw Google Maps link the user pasted, kept so it can ride along on the dispatch
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
 
   // Autocomplete suggestions
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -133,6 +135,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setDetectedCompany('');
       setResolvedCoords(null);
       setDistances([]);
+      setGoogleMapsUrl('');
       onLocationChange(null);
       return;
     }
@@ -144,6 +147,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setSubLocation('');
       setOwnerPhone('');
       setResolvedCoords(urlCheck.coords);
+      setGoogleMapsUrl(urlCheck.rawUrl || text);
       onLocationChange(urlCheck.coords);
       return;
     }
@@ -158,6 +162,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setCountTons(parsed.countTons);
       setRateSpecs(parsed.rateSpecs);
       setHarvestDate(parsed.harvestDate);
+      setGoogleMapsUrl(parsed.googleMapsUrl || '');
 
       // Check if message mentions a company inside *...*
       const compMatch = text.match(/\*([^*]+)\*/);
@@ -207,6 +212,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setDetectedCompany('');
       setResolvedCoords(null);
       setDistances([]);
+      setGoogleMapsUrl('');
       onLocationChange(null);
       return;
     }
@@ -217,6 +223,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     if (instantHub) {
       setExtractedLocation(text);
       setResolvedCoords(instantHub);
+      setGoogleMapsUrl('');
       onLocationChange(instantHub);
       return;
     }
@@ -285,6 +292,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const handleSelectSuggestion = (villageName: string) => {
     setInputText(villageName);
     setSuggestions([]);
+    setGoogleMapsUrl('');
     const hub = findKnownHubCoordinates(villageName);
     if (hub) {
       setExtractedLocation(villageName);
@@ -315,6 +323,10 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     const sampler = samplers.find((s) => s.id === targetSamplerId);
     if (!sampler) return;
 
+    // Record the distance/duration we actually ranked this sampler by, so the
+    // "Today's Samples" list can show it later
+    const chosenDist = distances.find((d) => d.sampler.id === sampler.id);
+
     const assignedSample: Omit<SampleRequest, 'id' | 'createdAt' | 'status'> = {
       harvestDate: harvestDate || 'Today',
       farmerCode: farmerCode || 'General',
@@ -323,9 +335,12 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       locationName: extractedLocation || 'Pond Location',
       subLocation,
       coords: resolvedCoords,
+      googleMapsUrl,
       ownerPhone,
       company: detectedCompany || '',
       assignedSamplerId: sampler.id,
+      distanceKm: chosenDist?.distanceKm,
+      estimatedDuration: chosenDist?.durationText,
       rawMessage: inputText
     };
 
@@ -361,6 +376,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     setResolvedCoords(null);
     setDistances([]);
     setSuggestions([]);
+    setGoogleMapsUrl('');
     userSelectedSamplerRef.current = false;
     onLocationChange(null);
     // "+ Next Sample" is a deliberate continuation of typing, so bring the keyboard back
