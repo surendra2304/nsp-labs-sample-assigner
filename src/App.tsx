@@ -34,10 +34,7 @@ const MainLayout: React.FC = () => {
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   // Synchronized map coordinates & target highlight
-  const [pendingCoords, setPendingCoords] = useState<Coordinates | null>({
-    lat: 16.5144,
-    lng: 81.4286 // Default Kuppanapudi
-  });
+  const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
   const [targetSamplerId, setTargetSamplerId] = useState<string | null>(null);
 
   const targetSampler = samplers.find((s) => s.id === targetSamplerId) || samplers[0];

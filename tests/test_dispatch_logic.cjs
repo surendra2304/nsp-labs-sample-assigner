@@ -26,7 +26,6 @@ function calculateHaversineDistanceKm(p1, p2) {
   return Number((R * c * 1.25).toFixed(1));
 }
 
-// Test Haversine
 console.log('--- TEST 1: Distance Checks ---');
 const distBhimavaramToKuppanapudi = calculateHaversineDistanceKm(
   REGIONAL_AQUACULTURE_HUBS['bhimavaram'],
@@ -40,42 +39,56 @@ console.log(`Bhimavaram to Kuppanapudi: ${distBhimavaramToKuppanapudi} km`);
 console.log(`Narasapuram to Kuppanapudi: ${distNarasapuramToKuppanapudi} km`);
 assert(distBhimavaramToKuppanapudi < distNarasapuramToKuppanapudi, 'Bhimavaram should be nearer to Kuppanapudi than Narasapuram');
 
-// Test 2: Mogalthuru vs Narasapuram vs Bhimavaram
-const distNarasapuramToMogalthuru = calculateHaversineDistanceKm(
-  REGIONAL_AQUACULTURE_HUBS['narasapuram'],
-  REGIONAL_AQUACULTURE_HUBS['mogalthuru']
-);
-const distBhimavaramToMogalthuru = calculateHaversineDistanceKm(
-  REGIONAL_AQUACULTURE_HUBS['bhimavaram'],
-  REGIONAL_AQUACULTURE_HUBS['mogalthuru']
-);
-console.log(`Narasapuram to Mogalthuru: ${distNarasapuramToMogalthuru} km`);
-console.log(`Bhimavaram to Mogalthuru: ${distBhimavaramToMogalthuru} km`);
-assert(distNarasapuramToMogalthuru < distBhimavaramToMogalthuru, 'Narasapuram should be nearer to Mogalthuru than Bhimavaram');
+console.log('--- TEST 2: Dynamic Location Movement ---');
+// Step A: Ramesh starts at Bhimavaram, Suresh at Narasapuram, Naidu at Palakol
+let rameshLoc = { ...REGIONAL_AQUACULTURE_HUBS['bhimavaram'] };
+let sureshLoc = { ...REGIONAL_AQUACULTURE_HUBS['narasapuram'] };
+let naiduLoc = { ...REGIONAL_AQUACULTURE_HUBS['palakol'] };
 
-console.log('✅ Distance logic passed successfully!');
+// Step B: Sample 1 at Kuppanapudi is assigned to Ramesh
+// Ramesh's location moves to Kuppanapudi!
+rameshLoc = { ...REGIONAL_AQUACULTURE_HUBS['kuppanapudi'] };
+console.log(`Ramesh assigned to Kuppanapudi. New position: ${rameshLoc.lat}, ${rameshLoc.lng}`);
 
-// Test 3: Formatting WhatsApp Dispatch
+// Step C: Sample 2 at Vempa comes in! Who is closer?
+const rameshToVempa = calculateHaversineDistanceKm(rameshLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
+const sureshToVempa = calculateHaversineDistanceKm(sureshLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
+const naiduToVempa = calculateHaversineDistanceKm(naiduLoc, REGIONAL_AQUACULTURE_HUBS['vempa']);
+
+console.log(`Ramesh (from Kuppanapudi) to Vempa: ${rameshToVempa} km`);
+console.log(`Suresh (from Narasapuram) to Vempa: ${sureshToVempa} km`);
+console.log(`Naidu (from Palakol) to Vempa: ${naiduToVempa} km`);
+
+assert(rameshToVempa < sureshToVempa, 'Ramesh at Kuppanapudi must be closer to Vempa than Suresh at Narasapuram');
+assert(rameshToVempa < naiduToVempa, 'Ramesh at Kuppanapudi must be closer to Vempa than Naidu at Palakol');
+console.log('✅ Dynamic location movement test passed 100%!');
+
+console.log('--- TEST 3: WhatsApp Dispatch Format ---');
 function formatWhatsAppDispatchMessage(sample, samplerName) {
   const lines = [];
   lines.push(`@${samplerName.trim()}`);
   lines.push(`*${sample.company.trim()}*`);
   lines.push(sample.farmerCode.trim());
   lines.push(sample.countTons.trim());
-  if (sample.subLocation) {
+  if (sample.subLocation && sample.subLocation.trim().length > 0) {
     lines.push(`${sample.locationName.trim()},(${sample.subLocation.trim()})`);
   } else {
     lines.push(sample.locationName.trim());
   }
-  if (sample.ownerPhone) lines.push(sample.ownerPhone.trim());
-  if (sample.altContactName || sample.altContactPhone) {
-    lines.push(`${sample.altContactName || ''} ${sample.altContactPhone || ''}`.trim());
+  if (sample.ownerPhone) {
+    lines.push(sample.ownerPhone.trim());
+  }
+  if (sample.altContactPhone || sample.altContactName) {
+    const contactParts = [sample.altContactName?.trim(), sample.altContactPhone?.trim()].filter(Boolean);
+    if (contactParts.length > 0) {
+      lines.push(contactParts.join(' '));
+    }
   }
   return lines.join('\n');
 }
 
-console.log('--- TEST 2: WhatsApp Dispatch Format ---');
-const samplePayload = {
+const expectedOutput = `@Ramesh\n*Sigma sea foods*\nGnr\n90c-2tons\nKuppanapudi,(konalapalli)\n+919014747367\nMadhu 9032259499`;
+const testSample = {
   company: 'Sigma sea foods',
   farmerCode: 'Gnr',
   countTons: '90c-2tons',
@@ -86,16 +99,6 @@ const samplePayload = {
   altContactPhone: '9032259499'
 };
 
-const formatted = formatWhatsAppDispatchMessage(samplePayload, 'Ramesh');
-console.log('Generated Output:\n' + formatted);
-
-const expected = `@Ramesh
-*Sigma sea foods*
-Gnr
-90c-2tons
-Kuppanapudi,(konalapalli)
-+919014747367
-Madhu 9032259499`;
-
-assert.strictEqual(formatted, expected, 'Formatted message must match exact user specification');
+const actualOutput = formatWhatsAppDispatchMessage(testSample, 'Ramesh');
+assert.strictEqual(actualOutput, expectedOutput);
 console.log('✅ WhatsApp message format matches 100%!');

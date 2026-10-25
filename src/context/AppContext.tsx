@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Sampler, Company, SampleRequest, AppSettings, Coordinates } from '../types';
-import { REGIONAL_AQUACULTURE_HUBS } from '../utils/geoUtils';
+import type { Sampler, Company, SampleRequest, AppSettings, Coordinates } from '../types';
+import { REGIONAL_AQUACULTURE_HUBS, parseNumericTonnage } from '../utils/geoUtils';
 
 const DEFAULT_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyB-YwGXSHF_lJEp18w6-Z4i2ZJhTQQSteI';
 
@@ -72,14 +72,18 @@ interface AppContextType {
   activeView: 'map' | 'list' | 'batch';
   setActiveView: (view: 'map' | 'list' | 'batch') => void;
   setSelectedRequest: (req: SampleRequest | null) => void;
-  addSampleRequest: (req: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>) => SampleRequest;
+  createAndAssignSample: (
+    reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>,
+    samplerId: string
+  ) => SampleRequest;
+  addSampleRequest: (reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>) => SampleRequest;
   assignSampleToSampler: (sampleId: string, samplerId: string) => void;
   updateSamplerLocation: (samplerId: string, locationName: string, coords: Coordinates, subLocation?: string) => void;
   updateSampler: (updated: Sampler) => void;
   addSampler: (newSampler: Omit<Sampler, 'id' | 'activeAssignments'>) => void;
   deleteSampler: (samplerId: string) => void;
   resetAllSamplersToHome: () => void;
-  addCompany: (name: string, whatsappGroup?: string) => void;
+  addCompany: (name: string, whatsappGroup?: string, groupInviteUrl?: string) => void;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   deleteSampleRequest: (id: string) => void;
   markSampleCollected: (id: string) => void;
@@ -119,7 +123,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return {
       googleMapsApiKey: DEFAULT_API_KEY,
       mapCenter: { lat: 16.5449, lng: 81.5212 }, // Bhimavaram center
-      mapZoom: 11
+      mapZoom: 11,
+      mapTypeId: 'hybrid'
     };
   });
 
@@ -143,34 +148,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem('nsp_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Actions
-  const addSampleRequest = (reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>): SampleRequest => {
+  /**
+   * ATOMIC: Creates a new sample request and immediately assigns it to the given sampler,
+   * updating BOTH the sample list AND moving the sampler's current location to the pond!
+   */
+  const createAndAssignSample = (
+    reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>,
+    samplerId: string
+  ): SampleRequest => {
+    const sampleId = `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const tonnage = reqData.tonnageNumber ?? parseNumericTonnage(reqData.countTons);
+
     const newReq: SampleRequest = {
       ...reqData,
-      id: `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      createdAt: new Date().toISOString(),
-      status: 'pending'
+      id: sampleId,
+      assignedSamplerId: samplerId,
+      status: 'assigned',
+      tonnageNumber: tonnage,
+      createdAt: new Date().toISOString()
     };
+
+    // 1. Update requests state
     setRequests((prev) => [newReq, ...prev]);
     setSelectedRequest(newReq);
-    return newReq;
-  };
 
-  const assignSampleToSampler = (sampleId: string, samplerId: string) => {
-    const sample = requests.find((r) => r.id === sampleId);
-    const sampler = samplers.find((s) => s.id === samplerId);
-    if (!sample || !sampler) return;
-
-    // 1. Update Sample status to assigned
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === sampleId
-          ? { ...r, assignedSamplerId: samplerId, status: 'assigned' }
-          : r
-      )
-    );
-
-    // 2. Dynamic Sampler Movement: Sampler's current location updates to this pond location!
+    // 2. Dynamic Sampler Movement: Move sampler's current location directly to this new pond!
     setSamplers((prev) =>
       prev.map((s) => {
         if (s.id === samplerId) {
@@ -178,9 +180,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ...s,
             status: 'busy',
             currentLocation: {
-              name: sample.locationName,
-              subLocation: sample.subLocation,
-              coords: sample.coords,
+              name: reqData.locationName,
+              subLocation: reqData.subLocation,
+              coords: reqData.coords,
               lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             },
             activeAssignments: [...s.activeAssignments, sampleId]
@@ -189,6 +191,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return s;
       })
     );
+
+    return newReq;
+  };
+
+  /**
+   * Adds a sample request in pending status
+   */
+  const addSampleRequest = (reqData: Omit<SampleRequest, 'id' | 'createdAt' | 'status'>): SampleRequest => {
+    const newReq: SampleRequest = {
+      ...reqData,
+      id: `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tonnageNumber: reqData.tonnageNumber ?? parseNumericTonnage(reqData.countTons),
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
+    setRequests((prev) => [newReq, ...prev]);
+    setSelectedRequest(newReq);
+    return newReq;
+  };
+
+  /**
+   * Assigns an existing pending sample to a sampler
+   */
+  const assignSampleToSampler = (sampleId: string, samplerId: string) => {
+    setRequests((prevRequests) => {
+      const sample = prevRequests.find((r) => r.id === sampleId);
+      if (sample) {
+        // Move sampler location
+        setSamplers((prevSamplers) =>
+          prevSamplers.map((s) => {
+            if (s.id === samplerId) {
+              return {
+                ...s,
+                status: 'busy',
+                currentLocation: {
+                  name: sample.locationName,
+                  subLocation: sample.subLocation,
+                  coords: sample.coords,
+                  lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                },
+                activeAssignments: [...s.activeAssignments, sampleId]
+              };
+            }
+            return s;
+          })
+        );
+      }
+
+      return prevRequests.map((r) =>
+        r.id === sampleId ? { ...r, assignedSamplerId: samplerId, status: 'assigned' } : r
+      );
+    });
   };
 
   const updateSamplerLocation = (
@@ -246,11 +300,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const addCompany = (name: string, whatsappGroup?: string) => {
+  const addCompany = (name: string, whatsappGroup?: string, groupInviteUrl?: string) => {
     const newComp: Company = {
       id: `comp-${Date.now()}`,
-      name: name.trim(),
-      whatsappGroup: whatsappGroup?.trim()
+      name,
+      whatsappGroup: whatsappGroup || `${name} Group`,
+      groupInviteUrl
     };
     setCompanies((prev) => [...prev, newComp]);
   };
@@ -283,6 +338,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeView,
         setActiveView,
         setSelectedRequest,
+        createAndAssignSample,
         addSampleRequest,
         assignSampleToSampler,
         updateSamplerLocation,

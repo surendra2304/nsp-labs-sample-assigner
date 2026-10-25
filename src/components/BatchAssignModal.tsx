@@ -29,7 +29,7 @@ interface SamplerRoutePlan {
 }
 
 export const BatchAssignModal: React.FC<BatchAssignModalProps> = ({ isOpen, onClose }) => {
-  const { samplers, companies, addSampleRequest, assignSampleToSampler } = useApp();
+  const { samplers, companies, createAndAssignSample } = useApp();
 
   const [bulkInput, setBulkInput] = useState(`Harvest date 26/10/26
 Gnr
@@ -159,23 +159,24 @@ Undi
 
     for (const plan of plans) {
       for (const item of plan.items) {
-        const created = addSampleRequest({
-          harvestDate: item.harvestDate,
-          farmerCode: item.farmerCode,
-          countTons: item.countTons,
-          tonnageNumber: item.tonnageNumber,
-          rateSpecs: item.rateSpecs,
-          locationName: item.locationName,
-          subLocation: item.subLocation,
-          coords: item.coords || { lat: 16.5449, lng: 81.5212 },
-          googleMapsUrl: item.googleMapsUrl,
-          ownerPhone: item.ownerPhone,
-          company,
-          assignedSamplerId: plan.sampler.id,
-          rawMessage: item.rawMessage
-        });
-
-        assignSampleToSampler(created.id, plan.sampler.id);
+        createAndAssignSample(
+          {
+            harvestDate: item.harvestDate,
+            farmerCode: item.farmerCode,
+            countTons: item.countTons,
+            tonnageNumber: item.tonnageNumber,
+            rateSpecs: item.rateSpecs,
+            locationName: item.locationName,
+            subLocation: item.subLocation,
+            coords: item.coords || { lat: 16.5449, lng: 81.5212 },
+            googleMapsUrl: item.googleMapsUrl,
+            ownerPhone: item.ownerPhone,
+            company,
+            assignedSamplerId: plan.sampler.id,
+            rawMessage: item.rawMessage
+          },
+          plan.sampler.id
+        );
       }
     }
 
