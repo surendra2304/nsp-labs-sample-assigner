@@ -44,45 +44,63 @@ export function loadGoogleMaps(apiKey: string): Promise<any> {
 }
 
 /**
- * Geocodes a place name (e.g. "Kuppanapudi", "Kalla, West Godavari") into Coordinates.
- * Falls back to regional dictionary if Google Maps is unavailable or returns no result.
+ * Geocodes a place name (e.g. "Kuppanapudi", "Vempa", "Undi") into accurate Coordinates.
+ * Prioritizes Google Maps Geocoder for high-precision satellite accuracy,
+ * with regional aquaculture dictionary fallback.
  */
 export async function geocodePlace(placeName: string, _apiKey?: string): Promise<Coordinates | null> {
-  // First check regional hubs dictionary for instant local hit
-  const localMatch = findKnownHubCoordinates(placeName);
-  if (localMatch) {
-    return localMatch;
+  const cleaned = placeName.trim();
+  if (!cleaned) return null;
+
+  // 1. If coordinates string was provided directly (e.g. "16.5144, 81.4286")
+  const rawMatch = cleaned.match(/([-+]?\d{1,2}\.\d+)\s*,\s*([-+]?\d{1,3}\.\d+)/);
+  if (rawMatch) {
+    return {
+      lat: parseFloat(rawMatch[1]),
+      lng: parseFloat(rawMatch[2])
+    };
   }
 
-  // Attempt Google Geocoder if loaded
+  // 2. Query Google Maps Geocoder for highest precision
   const win = window as any;
   if (win.google && win.google.maps && win.google.maps.Geocoder) {
     try {
       const geocoder = new win.google.maps.Geocoder();
-      const response = await new Promise<any>((resolve, reject) => {
+      const result = await new Promise<Coordinates | null>((resolve) => {
         geocoder.geocode(
           {
-            address: `${placeName}, West Godavari, Andhra Pradesh, India`,
+            address: `${cleaned}, West Godavari, Andhra Pradesh, India`,
             componentRestrictions: { country: 'IN' }
           },
           (results: any, status: any) => {
             if (status === 'OK' && results && results.length > 0) {
-              resolve({ results });
+              const loc = results[0].geometry.location;
+              resolve({
+                lat: typeof loc.lat === 'function' ? loc.lat() : loc.lat,
+                lng: typeof loc.lng === 'function' ? loc.lng() : loc.lng
+              });
             } else {
-              reject(status);
+              resolve(null);
             }
           }
         );
       });
 
-      const loc = response.results[0].geometry.location;
-      return { lat: loc.lat(), lng: loc.lng() };
+      if (result) {
+        return result;
+      }
     } catch (err) {
-      console.warn('Google geocoder lookup error, trying fallback:', err);
+      console.warn('Google geocoder lookup error, trying regional database:', err);
     }
   }
 
-  return localMatch;
+  // 3. Fallback to regional aquaculture dictionary if offline or geocoder didn't return
+  const localMatch = findKnownHubCoordinates(cleaned);
+  if (localMatch) {
+    return localMatch;
+  }
+
+  return null;
 }
 
 export interface DistanceResult {
@@ -131,7 +149,7 @@ export async function calculateRoadDistance(
         durationText: element.duration.text
       };
     } catch (err) {
-      console.warn('Distance Matrix failed, falling back to road-factor estimate', err);
+      // Fall through to road-factor estimate
     }
   }
 

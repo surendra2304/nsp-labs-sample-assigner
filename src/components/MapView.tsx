@@ -7,10 +7,7 @@ import {
   Navigation,
   Crosshair,
   Maximize2,
-  Minimize2,
-  Layers,
-  MapPin,
-  Sparkles
+  Minimize2
 } from 'lucide-react';
 
 interface MapViewProps {
@@ -65,7 +62,6 @@ export const MapView: React.FC<MapViewProps> = ({
           if (!isMounted || !mapContainerRef.current) return;
 
           if (!googleMapRef.current) {
-            // Clear any prior DOM remnants
             mapContainerRef.current.innerHTML = '';
 
             const map = new g.maps.Map(mapContainerRef.current, {
@@ -234,7 +230,6 @@ export const MapView: React.FC<MapViewProps> = ({
       });
 
       // 2. Plot or Update Assigned Requests (Ponds)
-      // Remove stale request markers
       const currentReqIds = new Set(requests.map((r) => r.id));
       Object.keys(googleRequestMarkersRef.current).forEach((id) => {
         if (!currentReqIds.has(id)) {
@@ -321,19 +316,18 @@ export const MapView: React.FC<MapViewProps> = ({
           googlePendingMarkerRef.current.setMap(map);
         }
       } else if (googlePendingMarkerRef.current) {
-        // Hide pending marker if no pendingCoords
         googlePendingMarkerRef.current.setMap(null);
       }
     }
   }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick]);
 
-  // ROUTE LINES: Draw route between target sampler and pending pond + sampler history trails
+  // ROUTE LINES: Draw route between target sampler and pending pond
   useEffect(() => {
     if (engine === 'google' && googleMapRef.current && (window as any).google) {
       const g = (window as any).google;
       const map = googleMapRef.current;
 
-      // 1. Draw route line from Target Sampler to Pending Pond
+      // Draw route line from Target Sampler to Pending Pond
       if (targetSamplerId && pendingCoords && pendingCoords.lat) {
         const sampler = samplers.find((s) => s.id === targetSamplerId);
         if (sampler) {
@@ -362,52 +356,20 @@ export const MapView: React.FC<MapViewProps> = ({
       } else if (googleRoutePolylineRef.current) {
         googleRoutePolylineRef.current.setMap(null);
       }
-
-      // 2. Draw Historical routes for each sampler's assigned ponds today
-      googleHistoryPolylinesRef.current.forEach((line) => line.setMap(null));
-      googleHistoryPolylinesRef.current = [];
-
-      samplers.forEach((sampler) => {
-        const sRequests = requests.filter((r) => r.assignedSamplerId === sampler.id);
-        if (sRequests.length > 0) {
-          // Connect homeBase -> pond1 -> pond2 ...
-          const trailPath = [
-            sampler.homeBase.coords,
-            ...sRequests.map((r) => r.coords)
-          ];
-
-          const historyLine = new g.maps.Polyline({
-            path: trailPath,
-            geodesic: true,
-            strokeColor: sampler.color,
-            strokeOpacity: 0.6,
-            strokeWeight: 3,
-            icons: [
-              {
-                icon: { path: g.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2 },
-                offset: '100%'
-              }
-            ],
-            map
-          });
-
-          googleHistoryPolylinesRef.current.push(historyLine);
-        }
-      });
     }
-  }, [engine, targetSamplerId, pendingCoords, samplers, requests]);
+  }, [engine, targetSamplerId, pendingCoords, samplers]);
 
   return (
     <div
-      className={`relative w-full rounded-2xl overflow-hidden shadow-inner bg-slate-900 border border-slate-300 transition-all ${
-        isFullscreen ? 'fixed inset-3 z-50 h-[calc(100vh-24px)]' : 'h-full min-h-[460px]'
+      className={`relative w-full h-full bg-slate-900 transition-all ${
+        isFullscreen ? 'fixed inset-0 z-50' : ''
       }`}
     >
       {/* Map Canvas */}
-      <div ref={mapContainerRef} className="w-full h-full min-h-[460px]" />
+      <div ref={mapContainerRef} className="w-full h-full" />
 
-      {/* Top Floating Sampler Status Badges */}
-      <div className="absolute top-3 left-3 right-3 sm:right-auto z-10 flex flex-wrap items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs text-white">
+      {/* Top Left Sampler Status Badges (Underneath top header) */}
+      <div className="absolute top-14 left-3 z-10 flex flex-wrap items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl shadow-lg border border-slate-700/80 text-xs text-white">
         <div className="flex items-center gap-1 font-bold text-slate-300 px-1">
           <Navigation className="w-3.5 h-3.5 text-blue-400" />
           <span className="hidden sm:inline">Samplers:</span>
@@ -440,8 +402,8 @@ export const MapView: React.FC<MapViewProps> = ({
         })}
       </div>
 
-      {/* Top Right Floating Controls: Satellite toggle / Fit / Fullscreen */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">
+      {/* Top Right Controls: Satellite toggle / Fit */}
+      <div className="absolute top-14 right-3 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">
         {/* Satellite / Hybrid toggle */}
         <button
           type="button"
@@ -451,7 +413,7 @@ export const MapView: React.FC<MapViewProps> = ({
               ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-300 hover:text-white'
           }`}
-          title="Toggle Satellite Imagery with roads and ponds"
+          title="Toggle Satellite Imagery"
         >
           <span>🛰️ Satellite</span>
         </button>
@@ -465,23 +427,6 @@ export const MapView: React.FC<MapViewProps> = ({
         >
           <Crosshair className="w-4 h-4" />
         </button>
-
-        {/* Fullscreen Toggle */}
-        <button
-          type="button"
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Map'}
-          className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
-        >
-          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-        </button>
-      </div>
-
-      {/* Bottom Hint */}
-      <div className="absolute bottom-6 left-3 z-10 pointer-events-none hidden sm:block">
-        <div className="bg-slate-900/85 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] text-slate-300 border border-slate-800 flex items-center gap-1.5">
-          <span>💡 Tap anywhere on map or drag pin onto exact pond bund</span>
-        </div>
       </div>
     </div>
   );

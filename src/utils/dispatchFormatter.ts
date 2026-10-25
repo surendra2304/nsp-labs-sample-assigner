@@ -1,4 +1,4 @@
-import { SampleRequest } from '../types';
+import type { SampleRequest } from '../types';
 
 /**
  * Formats the exact WhatsApp dispatch message to be posted into the company WhatsApp group
@@ -16,7 +16,7 @@ import { SampleRequest } from '../types';
 export function formatWhatsAppDispatchMessage(
   sample: SampleRequest,
   samplerName: string,
-  includeMapLink = true
+  includeMapLink = false
 ): string {
   const lines: string[] = [];
 
@@ -24,23 +24,29 @@ export function formatWhatsAppDispatchMessage(
   lines.push(`@${samplerName.trim()}`);
 
   // 2. Bold Company Name
-  lines.push(`*${sample.company.trim()}*`);
+  if (sample.company && sample.company.trim()) {
+    lines.push(`*${sample.company.trim()}*`);
+  }
 
-  // 3. Farmer / Lot Code
-  lines.push(sample.farmerCode.trim());
+  // 3. Farmer / Lot Code (only if present)
+  if (sample.farmerCode && sample.farmerCode.trim() && sample.farmerCode !== 'General') {
+    lines.push(sample.farmerCode.trim());
+  }
 
-  // 4. Count & Tonnage
-  lines.push(sample.countTons.trim());
+  // 4. Count & Tonnage (only if present)
+  if (sample.countTons && sample.countTons.trim() && sample.countTons !== 'Standard') {
+    lines.push(sample.countTons.trim());
+  }
 
   // 5. Location with sublocation/landmark in parentheses
   if (sample.subLocation && sample.subLocation.trim().length > 0) {
     lines.push(`${sample.locationName.trim()},(${sample.subLocation.trim()})`);
-  } else {
+  } else if (sample.locationName && sample.locationName.trim()) {
     lines.push(sample.locationName.trim());
   }
 
   // 6. Pond Owner Phone Number
-  if (sample.ownerPhone) {
+  if (sample.ownerPhone && sample.ownerPhone.trim()) {
     lines.push(sample.ownerPhone.trim());
   }
 
@@ -52,7 +58,7 @@ export function formatWhatsAppDispatchMessage(
     }
   }
 
-  // Optional: Direct Google Maps navigation link for the sampler
+  // Optional: Direct Google Maps navigation link
   if (includeMapLink) {
     if (sample.googleMapsUrl) {
       lines.push(`📍 Maps: ${sample.googleMapsUrl}`);
@@ -68,15 +74,16 @@ export function formatWhatsAppDispatchMessage(
  * Opens WhatsApp with pre-filled message text.
  * Works seamlessly on mobile devices (Android/iOS) and desktop (WhatsApp Web / App).
  */
-export function sendViaWhatsApp(messageText: string, phoneNumber?: string): void {
-  const encodedText = encodeURIComponent(messageText);
+export function sendViaWhatsApp(text: string, phone?: string): void {
+  const encodedText = encodeURIComponent(text);
   let url = '';
 
-  if (phoneNumber) {
-    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+  if (phone) {
+    // Direct chat with sampler phone number
+    const cleanPhone = phone.replace(/[^\d]/g, '');
     url = `https://wa.me/${cleanPhone}?text=${encodedText}`;
   } else {
-    // Opens WhatsApp share dialog to pick any group or contact
+    // Open WhatsApp share sheet (for group posting)
     url = `https://api.whatsapp.com/send?text=${encodedText}`;
   }
 
@@ -84,33 +91,26 @@ export function sendViaWhatsApp(messageText: string, phoneNumber?: string): void
 }
 
 /**
- * Copies message text to clipboard with modern navigator.clipboard and fallback.
+ * Copies text to system clipboard.
  */
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
-    if (navigator.clipboard && window.isSecureContext) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-  } catch (err) {
-    console.warn('Clipboard API failed, trying fallback...', err);
-  }
-
-  // Fallback for older browsers / webviews
-  try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
+    textArea.style.left = '-9999px';
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    const successful = document.execCommand('copy');
-    textArea.remove();
-    return successful;
+    const success = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return success;
   } catch (err) {
-    console.error('Fallback clipboard failed', err);
+    console.error('Failed to copy text: ', err);
     return false;
   }
 }

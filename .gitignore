@@ -20,6 +20,7 @@ dist-ssr
 *.local
 
 # Editor directories and files
+android_apk/
 .vscode/*
 !.vscode/extensions.json
 .idea
