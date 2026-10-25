@@ -1,12 +1,12 @@
-import { Coordinates } from '../types';
+import type { Coordinates } from '../types';
 
 /**
- * Pre-indexed regional coordinates for major aquaculture and prawn harvesting hubs
- * in West Godavari & Krishna districts of Andhra Pradesh.
+ * Comprehensive regional coordinates dictionary for aquaculture and prawn harvesting hubs
+ * in West Godavari, Krishna, and Konaseema districts of Andhra Pradesh.
  * Provides instant offline lookups and fallback for rapid dispatch.
  */
 export const REGIONAL_AQUACULTURE_HUBS: Record<string, Coordinates> = {
-  // Major towns
+  // Major towns & mandal headquarters
   'bhimavaram': { lat: 16.5449, lng: 81.5212 },
   'narasapuram': { lat: 16.4410, lng: 81.7011 },
   'narasapur': { lat: 16.4410, lng: 81.7011 },
@@ -15,7 +15,7 @@ export const REGIONAL_AQUACULTURE_HUBS: Record<string, Coordinates> = {
   'tanuku': { lat: 16.7570, lng: 81.6820 },
   'akividu': { lat: 16.6022, lng: 81.3800 },
   
-  // Specific aquaculture villages mentioned in use cases
+  // High-density prawn harvesting villages mentioned by user
   'mogalthuru': { lat: 16.4178, lng: 81.5947 },
   'mogaluru': { lat: 16.4178, lng: 81.5947 },
   'mobiletour': { lat: 16.4178, lng: 81.5947 },
@@ -26,7 +26,7 @@ export const REGIONAL_AQUACULTURE_HUBS: Record<string, Coordinates> = {
   'konalapalli': { lat: 16.5200, lng: 81.4350 },
   'sesali': { lat: 16.5450, lng: 81.4550 },
   
-  // Other prominent aquaculture mandals / villages
+  // Rural aquaculture farming belts
   'veeravasaram': { lat: 16.5110, lng: 81.6210 },
   'penumantra': { lat: 16.6340, lng: 81.6540 },
   'pippara': { lat: 16.6570, lng: 81.5670 },
@@ -40,7 +40,40 @@ export const REGIONAL_AQUACULTURE_HUBS: Record<string, Coordinates> = {
   'kovvali': { lat: 16.7110, lng: 81.4200 },
   'chinakapavaram': { lat: 16.6110, lng: 81.4500 },
   'pedakapavaram': { lat: 16.6210, lng: 81.4600 },
-  'juvvalapalem': { lat: 16.5220, lng: 81.4720 }
+  'juvvalapalem': { lat: 16.5220, lng: 81.4720 },
+  'biyyaputhippa': { lat: 16.4020, lng: 81.6420 },
+  'perupalem': { lat: 16.4050, lng: 81.6780 },
+  'kaza': { lat: 16.4780, lng: 81.6850 },
+  'matsyapuri': { lat: 16.5050, lng: 81.6120 },
+  'rustumbada': { lat: 16.4380, lng: 81.6910 },
+  'lakshmaneswaram': { lat: 16.4350, lng: 81.6820 },
+  'doddipatla': { lat: 16.5020, lng: 81.7820 },
+  'chinchinada': { lat: 16.4850, lng: 81.8010 },
+  'achanta': { lat: 16.5980, lng: 81.7950 },
+  'poduru': { lat: 16.6120, lng: 81.7420 },
+  'penugonda': { lat: 16.6540, lng: 81.7650 },
+  'sidhantham': { lat: 16.6850, lng: 81.7920 },
+  'komarada': { lat: 16.5410, lng: 81.5050 },
+  'srungavruksham': { lat: 16.5380, lng: 81.5950 },
+  'gummaluru': { lat: 16.5520, lng: 81.6110 },
+  'lankalakoderu': { lat: 16.5280, lng: 81.7050 },
+  'goraganamudi': { lat: 16.5420, lng: 81.7220 },
+  'jakkaram': { lat: 16.5510, lng: 81.4880 },
+  'vissakoderu': { lat: 16.5720, lng: 81.5310 },
+  'rayalam': { lat: 16.5310, lng: 81.5050 },
+  'someswaram': { lat: 16.5510, lng: 81.5390 },
+  'bondada': { lat: 16.5180, lng: 81.4620 },
+  'chinamiram': { lat: 16.5320, lng: 81.5350 },
+  'pedamiram': { lat: 16.5250, lng: 81.5420 },
+  'losarigutlapadu': { lat: 16.4950, lng: 81.4820 },
+  'panduvva': { lat: 16.5820, lng: 81.4920 },
+  'cherukuvada': { lat: 16.5750, lng: 81.4780 },
+  'kolamuru': { lat: 16.6120, lng: 81.4850 },
+  'chilukuru': { lat: 16.6210, lng: 81.4920 },
+  'unudurru': { lat: 16.5880, lng: 81.4320 },
+  'vandram': { lat: 16.5680, lng: 81.4650 },
+  'garagaparru': { lat: 16.5520, lng: 81.4720 },
+  'palakoderu': { lat: 16.5880, lng: 81.5350 }
 };
 
 /**
@@ -92,13 +125,46 @@ export function findKnownHubCoordinates(name: string): Coordinates | null {
 }
 
 /**
+ * Autocomplete suggestions for villages
+ */
+export function getVillageSuggestions(query: string, maxResults = 6): string[] {
+  if (!query || query.trim().length < 1) return [];
+  const q = query.trim().toLowerCase();
+
+  const results: string[] = [];
+  for (const key of Object.keys(REGIONAL_AQUACULTURE_HUBS)) {
+    if (key.startsWith(q) || key.includes(q)) {
+      // Capitalize first letter
+      const capitalized = key.charAt(0).toUpperCase() + key.slice(1);
+      if (!results.includes(capitalized)) {
+        results.push(capitalized);
+      }
+      if (results.length >= maxResults) break;
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Extracts numeric tonnage from strings like "90c-2tons", "80c - 6.5 tons", "3 tons"
+ */
+export function parseNumericTonnage(countTonsString: string): number {
+  if (!countTonsString) return 0;
+  const match = countTonsString.match(/(\d+(?:\.\d+)?)\s*(?:tons?|ton|t)\b/i);
+  if (match) {
+    return parseFloat(match[1]);
+  }
+  // Try extracting any number after hyphen or count
+  const hyphenMatch = countTonsString.match(/[-–]\s*(\d+(?:\.\d+)?)/);
+  if (hyphenMatch) {
+    return parseFloat(hyphenMatch[1]);
+  }
+  return 0;
+}
+
+/**
  * Parses Google Maps URL or coordinate strings from WhatsApp messages
- * Supports:
- * - https://maps.app.goo.gl/...
- * - https://goo.gl/maps/...
- * - https://www.google.com/maps/place/...
- * - https://www.google.com/maps?q=16.544,81.521
- * - Raw "16.5449, 81.5212"
  */
 export function parseLocationFromGoogleMapsString(input: string): { coords?: Coordinates; rawUrl?: string; placeName?: string } {
   if (!input) return {};

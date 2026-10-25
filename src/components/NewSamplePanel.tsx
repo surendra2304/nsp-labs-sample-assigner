@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { parseCompanyMessage } from '../utils/messageParser';
 import { formatWhatsAppDispatchMessage, sendViaWhatsApp, copyTextToClipboard } from '../utils/dispatchFormatter';
 import { calculateRoadDistance, geocodePlace } from '../services/googleMapsService';
-import { findKnownHubCoordinates, parseLocationFromGoogleMapsString } from '../utils/geoUtils';
-import { Coordinates, Sampler } from '../types';
+import { findKnownHubCoordinates, parseLocationFromGoogleMapsString, getVillageSuggestions } from '../utils/geoUtils';
+import type { Coordinates, Sampler } from '../types';
 import {
   Sparkles,
   Phone,
@@ -17,7 +17,9 @@ import {
   ExternalLink,
   RotateCcw,
   Building2,
-  AlertCircle
+  Mic,
+  MicOff,
+  Search
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -55,6 +57,14 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [coords, setCoords] = useState<Coordinates>({ lat: 16.5144, lng: 81.4286 });
 
+  // Village typeahead
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const villageInputRef = useRef<HTMLInputElement>(null);
+
+  // Speech recognition state
+  const [isListening, setIsListening] = useState(false);
+
   // Calculation & Assignment state
   const [proximities, setProximities] = useState<SamplerProximity[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -83,12 +93,68 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
     }
   };
 
+  // Village typing & autocomplete suggestions
+  const handleVillageChange = (val: string) => {
+    setLocationName(val);
+    const matches = getVillageSuggestions(val);
+    setSuggestions(matches);
+    setShowSuggestions(matches.length > 0);
+  };
+
+  const handleSelectSuggestion = (village: string) => {
+    setLocationName(village);
+    setShowSuggestions(false);
+    const foundCoords = findKnownHubCoordinates(village);
+    if (foundCoords) {
+      setCoords(foundCoords);
+      onLocationChange?.(foundCoords);
+    }
+  };
+
+  // Voice dictation using Web Speech API
+  const handleToggleVoice = () => {
+    const win = window as any;
+    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome on Android or Desktop.');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-IN'; // Indian English / accent recognition
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          handleVillageChange(transcript.trim());
+        }
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.error(e);
+      setIsListening(false);
+    }
+  };
+
   // Resolve Location coordinates when locationName or googleMapsUrl changes
   useEffect(() => {
     let active = true;
 
     async function resolveCoords() {
-      // Check google maps url
       if (googleMapsUrl) {
         const parsed = parseLocationFromGoogleMapsString(googleMapsUrl);
         if (parsed.coords) {
@@ -100,7 +166,6 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
         }
       }
 
-      // Check village/hub name
       if (locationName) {
         const found = findKnownHubCoordinates(locationName);
         if (found) {
@@ -111,7 +176,6 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
           return;
         }
 
-        // Try geocoding
         const geocoded = await geocodePlace(locationName);
         if (active && geocoded) {
           setCoords(geocoded);
@@ -144,7 +208,6 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
         });
       }
 
-      // Sort ascending by distance (nearest first)
       results.sort((a, b) => a.distanceKm - b.distanceKm);
 
       if (active) {
@@ -170,7 +233,6 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
     const targetSampler = samplers.find((s) => s.id === selectedSamplerId);
     if (!targetSampler) return;
 
-    // 1. Create Sample Request
     const created = addSampleRequest({
       harvestDate,
       farmerCode,
@@ -188,10 +250,8 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
       rawMessage: rawText
     });
 
-    // 2. Assign to Sampler (updates sampler's current location!)
     assignSampleToSampler(created.id, targetSampler.id);
 
-    // 3. Generate dispatch message
     const dispatchText = formatWhatsAppDispatchMessage(
       {
         ...created,
@@ -202,11 +262,10 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
     setGeneratedDispatch(dispatchText);
     setAssignedSuccess(true);
 
-    // Confetti celebration
     try {
       confetti({
-        particleCount: 70,
-        spread: 60,
+        particleCount: 75,
+        spread: 65,
         origin: { y: 0.8 }
       });
     } catch (e) {
@@ -244,14 +303,14 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 md:p-6 transition-all">
       {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+      <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-base font-bold text-slate-800">New Sample Dispatch</h2>
-            <p className="text-xs text-slate-500">Paste WhatsApp SMS or enter pond details</p>
+            <p className="text-xs text-slate-500">Paste WhatsApp SMS or type pond village</p>
           </div>
         </div>
 
@@ -338,22 +397,59 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
 
           {/* Location & Contact Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-50/80 p-3 rounded-xl border border-slate-200/60">
-            {/* Left: Location & Sub-location */}
+            {/* Left: Location & Sub-location with Autocomplete & Voice */}
             <div className="space-y-2">
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-red-500" />
-                    Pond Village / Town:
+                <div className="flex-1 relative">
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-0.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-red-500" />
+                      Pond Village / Town:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleToggleVoice}
+                      className={`p-1 rounded-full transition-all cursor-pointer ${
+                        isListening
+                          ? 'bg-red-500 text-white animate-pulse'
+                          : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                      }`}
+                      title="Speak village name"
+                    >
+                      {isListening ? <Mic className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                    </button>
                   </label>
+
                   <input
+                    ref={villageInputRef}
                     type="text"
                     value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
+                    onChange={(e) => handleVillageChange(e.target.value)}
+                    onFocus={() => {
+                      if (locationName) setSuggestions(getVillageSuggestions(locationName));
+                      setShowSuggestions(true);
+                    }}
                     placeholder="e.g. Kuppanapudi or Kalla"
                     className="w-full p-2 bg-white border border-slate-200 rounded-lg font-semibold text-slate-800 outline-none focus:border-blue-500"
                   />
+
+                  {/* Autocomplete Suggestion Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-30 bg-white border border-slate-200 rounded-lg shadow-xl mt-1 overflow-hidden">
+                      {suggestions.map((v) => (
+                        <div
+                          key={v}
+                          onClick={() => handleSelectSuggestion(v)}
+                          className="px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium cursor-pointer flex items-center justify-between border-b border-slate-100 last:border-0"
+                        >
+                          <span>{v}</span>
+                          <span className="text-[10px] text-slate-400">West Godavari Hub</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div className="w-1/3">
                   <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
                     Landmark / (Sub):
@@ -362,7 +458,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                     type="text"
                     value={subLocation}
                     onChange={(e) => setSubLocation(e.target.value)}
-                    placeholder="e.g. konalapalli"
+                    placeholder="konalapalli"
                     className="w-full p-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 outline-none focus:border-blue-500"
                   />
                 </div>
@@ -414,7 +510,7 @@ export const NewSamplePanel: React.FC<NewSamplePanelProps> = ({
                     type="text"
                     value={altContactName}
                     onChange={(e) => setAltContactName(e.target.value)}
-                    placeholder="e.g. Madhu"
+                    placeholder="Madhu"
                     className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500"
                   />
                 </div>

@@ -1,10 +1,11 @@
-import { Coordinates, SampleRequest } from '../types';
-import { findKnownHubCoordinates, parseLocationFromGoogleMapsString } from './geoUtils';
+import type { Coordinates } from '../types';
+import { findKnownHubCoordinates, parseLocationFromGoogleMapsString, parseNumericTonnage } from './geoUtils';
 
 export interface ParsedCompanyMessage {
   harvestDate: string;
   farmerCode: string;
   countTons: string;
+  tonnageNumber: number;
   rateSpecs: string;
   locationName: string;
   subLocation?: string;
@@ -131,10 +132,13 @@ export function parseCompanyMessage(rawText: string, defaultCompany = 'Sigma sea
     coords = { lat: 16.5449, lng: 81.5212 };
   }
 
+  const tonnageNumber = parseNumericTonnage(countTons);
+
   return {
     harvestDate,
     farmerCode: farmerCode || 'General',
     countTons: countTons || 'Standard',
+    tonnageNumber,
     rateSpecs: rateSpecs || '-',
     locationName: locationName || 'Unknown Location',
     subLocation,

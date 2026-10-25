@@ -33,6 +33,7 @@ export interface Company {
   id: string;
   name: string;
   whatsappGroup?: string;
+  groupInviteUrl?: string; // e.g. https://chat.whatsapp.com/...
 }
 
 export interface SampleRequest {
@@ -40,6 +41,7 @@ export interface SampleRequest {
   harvestDate: string;
   farmerCode: string; // e.g. "Gnr"
   countTons: string;  // e.g. "90c-2tons"
+  tonnageNumber?: number; // e.g. 2.0 (for analytics & reporting)
   rateSpecs: string;  // e.g. "255+"
   locationName: string; // e.g. "Kuppanapudi"
   subLocation?: string; // e.g. "konalapalli"
@@ -61,4 +63,5 @@ export interface AppSettings {
   googleMapsApiKey: string;
   mapCenter: Coordinates;
   mapZoom: number;
+  mapTypeId?: 'roadmap' | 'satellite' | 'hybrid' | 'terrain';
 }

@@ -3,24 +3,26 @@ import { useApp } from '../context/AppContext';
 import {
   Map,
   ListOrdered,
-  Layers,
   Users,
   Settings,
   RotateCcw,
   Sparkles,
-  FlaskConical
+  FlaskConical,
+  BarChart3
 } from 'lucide-react';
 
 interface NavbarProps {
   onOpenSamplers: () => void;
   onOpenBatch: () => void;
   onOpenSettings: () => void;
+  onOpenSummary: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenSamplers,
   onOpenBatch,
-  onOpenSettings
+  onOpenSettings,
+  onOpenSummary
 }) => {
   const { activeView, setActiveView, resetAllSamplersToHome, samplers, requests } = useApp();
 
@@ -87,6 +89,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Action Icons */}
         <div className="flex items-center gap-1.5">
+          {/* Daily Report Trigger */}
+          <button
+            onClick={onOpenSummary}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all cursor-pointer shadow-2xs"
+            title="Daily Summary & Report"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Report</span>
+          </button>
+
           {/* Quick Batch Routing Modal Trigger */}
           <button
             onClick={onOpenBatch}

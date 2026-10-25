@@ -7,7 +7,8 @@ import { AssignmentList } from './components/AssignmentList';
 import { SamplerManagerModal } from './components/SamplerManagerModal';
 import { BatchAssignModal } from './components/BatchAssignModal';
 import { SettingsModal } from './components/SettingsModal';
-import { Coordinates } from './types';
+import { DailySummaryModal } from './components/DailySummaryModal';
+import type { Coordinates } from './types';
 
 const MainLayout: React.FC = () => {
   const { activeView } = useApp();
@@ -16,6 +17,7 @@ const MainLayout: React.FC = () => {
   const [isSamplersOpen, setIsSamplersOpen] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   // Synchronized map coordinates & target highlight
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>({
@@ -31,6 +33,7 @@ const MainLayout: React.FC = () => {
         onOpenSamplers={() => setIsSamplersOpen(true)}
         onOpenBatch={() => setIsBatchOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSummary={() => setIsSummaryOpen(true)}
       />
 
       {/* Main Body */}
@@ -45,8 +48,8 @@ const MainLayout: React.FC = () => {
               />
             </div>
 
-            {/* Right Column: Full Interactive Google Map */}
-            <div className="lg:col-span-7 order-1 lg:order-2 h-[420px] lg:h-[calc(100vh-110px)] lg:sticky lg:top-20">
+            {/* Right Column: Full Interactive Google Map with Satellite/Road toggle */}
+            <div className="lg:col-span-7 order-1 lg:order-2 h-[450px] lg:h-[calc(100vh-105px)] lg:sticky lg:top-20">
               <MapView
                 pendingCoords={pendingCoords}
                 targetSamplerId={targetSamplerId}
@@ -74,6 +77,11 @@ const MainLayout: React.FC = () => {
       <BatchAssignModal
         isOpen={isBatchOpen}
         onClose={() => setIsBatchOpen(false)}
+      />
+
+      <DailySummaryModal
+        isOpen={isSummaryOpen}
+        onClose={() => setIsSummaryOpen(false)}
       />
 
       <SettingsModal
