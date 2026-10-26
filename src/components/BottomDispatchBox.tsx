@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { parseCompanyMessage } from '../utils/messageParser';
 import { formatWhatsAppDispatchMessage, sendViaWhatsApp, copyTextToClipboard } from '../utils/dispatchFormatter';
@@ -19,7 +19,6 @@ interface BottomDispatchBoxProps {
   onLocationChange: (coords: Coordinates | null) => void;
   onTargetSamplerChange: (samplerId: string | null) => void;
   targetSamplerId: string | null;
-  onRegisterFocusHandler?: (fn: () => void) => void;
 }
 
 interface SamplerDist {
@@ -31,36 +30,14 @@ interface SamplerDist {
 export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   onLocationChange,
   onTargetSamplerChange,
-  targetSamplerId,
-  onRegisterFocusHandler
+  targetSamplerId
 }) => {
   const { samplers, createAndAssignSample } = useApp();
 
   // The ONE input box for everything (message, village name, or Maps link)
   const [inputText, setInputText] = useState('');
 
-  // Cursor position preservation so map clicks/zooms never lose cursor or focus
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const cursorPosRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
-
-  // Expose focus restore function to parent so any map click/zoom restores focus without scrolling
-  const restoreFocus = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus({ preventScroll: true });
-      try {
-        const { start, end } = cursorPosRef.current;
-        textareaRef.current.setSelectionRange(start, end);
-      } catch (e) {}
-    }
-  }, []);
-
-  useEffect(() => {
-    if (onRegisterFocusHandler) {
-      onRegisterFocusHandler(restoreFocus);
-    }
-  }, [onRegisterFocusHandler, restoreFocus]);
-
-  // Extracted details
+  // Extracted details - strictly from user input (NO FAKE DEFAULTS!)
   const [extractedLocation, setExtractedLocation] = useState('');
   const [subLocation, setSubLocation] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
@@ -69,6 +46,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   const [harvestDate, setHarvestDate] = useState('');
   const [rateSpecs, setRateSpecs] = useState('');
   const [detectedCompany, setDetectedCompany] = useState('');
+  const [directMapsUrl, setDirectMapsUrl] = useState('');
   const [resolvedCoords, setResolvedCoords] = useState<Coordinates | null>(null);
 
   // Autocomplete suggestions
@@ -93,7 +71,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
   useEffect(() => {
     const text = inputText.trim();
 
-    // Autocomplete suggestions
+    // Autocomplete suggestions (only when typing a single word/village)
     if (text.length >= 1 && !text.includes('\n') && !text.startsWith('http')) {
       const list = getVillageSuggestions(text);
       setSuggestions(list);
@@ -111,33 +89,59 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setRateSpecs('');
       setHarvestDate('');
       setDetectedCompany('');
+      setDirectMapsUrl('');
       setResolvedCoords(null);
       setDistances([]);
       onLocationChange(null);
       return;
     }
 
-    // 2. Direct Google Maps link or coordinates
+    // 2. Direct Google Maps link, coordinates, or shared location
     const urlCheck = parseLocationFromGoogleMapsString(text);
     if (urlCheck.coords) {
-      setExtractedLocation('Pond Location (from Maps link)');
+      const locTitle = urlCheck.placeName || 'Pond Location';
+      setExtractedLocation(locTitle);
       setSubLocation('');
       setOwnerPhone('');
+      setFarmerCode('');
+      setCountTons('');
+      setRateSpecs('');
+      setHarvestDate('');
+      setDetectedCompany('');
+      setDirectMapsUrl(urlCheck.rawUrl || (text.startsWith('http') ? text : ''));
       setResolvedCoords(urlCheck.coords);
       onLocationChange(urlCheck.coords);
+      return;
+    } else if (urlCheck.rawUrl && urlCheck.placeName && urlCheck.placeName !== 'Google Maps Location') {
+      // Shortened maps link with accompanying place text
+      setExtractedLocation(urlCheck.placeName);
+      setDirectMapsUrl(urlCheck.rawUrl);
+      const hub = findKnownHubCoordinates(urlCheck.placeName);
+      if (hub) {
+        setResolvedCoords(hub);
+        onLocationChange(hub);
+        return;
+      }
+      geocodePlace(urlCheck.placeName).then((c) => {
+        if (c) {
+          setResolvedCoords(c);
+          onLocationChange(c);
+        }
+      });
       return;
     }
 
     // 3. Multi-line message (pasted message from harvesting company)
     if (text.includes('\n')) {
       const parsed = parseCompanyMessage(text);
-      setExtractedLocation(parsed.locationName);
+      setExtractedLocation(parsed.locationName || '');
       setSubLocation(parsed.subLocation || '');
-      setOwnerPhone(parsed.ownerPhone);
-      setFarmerCode(parsed.farmerCode);
-      setCountTons(parsed.countTons);
-      setRateSpecs(parsed.rateSpecs);
-      setHarvestDate(parsed.harvestDate);
+      setOwnerPhone(parsed.ownerPhone || '');
+      setFarmerCode(parsed.farmerCode || '');
+      setCountTons(parsed.countTons || '');
+      setRateSpecs(parsed.rateSpecs || '');
+      setHarvestDate(parsed.harvestDate || '');
+      setDirectMapsUrl(parsed.googleMapsUrl || '');
 
       // Check if message mentions a company inside *...*
       const compMatch = text.match(/\*([^*]+)\*/);
@@ -149,7 +153,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
         return;
       }
 
-      const loc = parsed.locationName.trim();
+      const loc = parsed.locationName?.trim() || '';
       if (loc && loc.length >= 3) {
         // Known hub instant check
         const hub = findKnownHubCoordinates(loc);
@@ -185,6 +189,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       setRateSpecs('');
       setHarvestDate('');
       setDetectedCompany('');
+      setDirectMapsUrl('');
       setResolvedCoords(null);
       setDistances([]);
       onLocationChange(null);
@@ -196,6 +201,14 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     const instantHub = findKnownHubCoordinates(text);
     if (instantHub) {
       setExtractedLocation(text);
+      setSubLocation('');
+      setOwnerPhone('');
+      setFarmerCode('');
+      setCountTons('');
+      setRateSpecs('');
+      setHarvestDate('');
+      setDetectedCompany('');
+      setDirectMapsUrl('');
       setResolvedCoords(instantHub);
       onLocationChange(instantHub);
       return;
@@ -208,6 +221,14 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       const c = await geocodePlace(text);
       if (isCurrent && c) {
         setExtractedLocation(text);
+        setSubLocation('');
+        setOwnerPhone('');
+        setFarmerCode('');
+        setCountTons('');
+        setRateSpecs('');
+        setHarvestDate('');
+        setDetectedCompany('');
+        setDirectMapsUrl('');
         setResolvedCoords(c);
         onLocationChange(c);
       }
@@ -268,43 +289,58 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     const hub = findKnownHubCoordinates(villageName);
     if (hub) {
       setExtractedLocation(villageName);
+      setSubLocation('');
+      setOwnerPhone('');
+      setFarmerCode('');
+      setCountTons('');
+      setRateSpecs('');
+      setHarvestDate('');
+      setDetectedCompany('');
+      setDirectMapsUrl('');
       setResolvedCoords(hub);
       onLocationChange(hub);
     } else {
       geocodePlace(villageName).then((c) => {
         if (c) {
           setExtractedLocation(villageName);
+          setSubLocation('');
+          setOwnerPhone('');
+          setFarmerCode('');
+          setCountTons('');
+          setRateSpecs('');
+          setHarvestDate('');
+          setDetectedCompany('');
+          setDirectMapsUrl('');
           setResolvedCoords(c);
           onLocationChange(c);
         }
       });
     }
-    restoreFocus();
   };
 
   // When user clicks a specific sampler, lock their choice and do NOT let auto-calculation override!
   const handleSelectSampler = (samplerId: string) => {
     userSelectedSamplerRef.current = true;
     onTargetSamplerChange(samplerId);
-    restoreFocus();
   };
 
-  // Perform Assignment
+  // Perform Assignment - ONLY include details actually provided by the user!
   const handleAssign = () => {
     if (!targetSamplerId || !resolvedCoords) return;
     const sampler = samplers.find((s) => s.id === targetSamplerId);
     if (!sampler) return;
 
     const assignedSample: Omit<SampleRequest, 'id' | 'createdAt' | 'status'> = {
-      harvestDate: harvestDate || 'Today',
-      farmerCode: farmerCode || 'General',
-      countTons: countTons || 'Standard',
-      rateSpecs: rateSpecs || '',
-      locationName: extractedLocation || 'Pond Location',
-      subLocation,
+      harvestDate: harvestDate.trim(),
+      farmerCode: farmerCode.trim(),
+      countTons: countTons.trim(),
+      rateSpecs: rateSpecs.trim(),
+      locationName: extractedLocation.trim() || 'Pond Location',
+      subLocation: subLocation.trim(),
       coords: resolvedCoords,
-      ownerPhone,
-      company: detectedCompany || '',
+      googleMapsUrl: directMapsUrl.trim(),
+      ownerPhone: ownerPhone.trim(),
+      company: detectedCompany.trim(),
       assignedSamplerId: sampler.id,
       rawMessage: inputText
     };
@@ -338,12 +374,12 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     setRateSpecs('');
     setHarvestDate('');
     setDetectedCompany('');
+    setDirectMapsUrl('');
     setResolvedCoords(null);
     setDistances([]);
     setSuggestions([]);
     userSelectedSamplerRef.current = false;
     onLocationChange(null);
-    setTimeout(restoreFocus, 50);
   };
 
   const handleCopy = async () => {
@@ -378,7 +414,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
                   Assigned to {assignedResult.samplerName}!
                 </h3>
                 <p className="text-[11px] text-emerald-700 font-semibold">
-                  Location updated to {assignedResult.locationName}
+                  Location: {assignedResult.locationName}
                 </p>
               </div>
             </div>
@@ -447,30 +483,11 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
             </div>
           )}
 
-          {/* THE SINGLE INPUT BOX (Preserves focus across map interactions) */}
+          {/* THE SINGLE INPUT BOX (Normal native behavior: blurs on map touch, keyboard dismisses when zooming) */}
           <textarea
-            ref={textareaRef}
             rows={2}
             value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              cursorPosRef.current = {
-                start: e.target.selectionStart,
-                end: e.target.selectionEnd
-              };
-            }}
-            onSelect={(e) => {
-              const t = e.target as HTMLTextAreaElement;
-              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
-            }}
-            onClick={(e) => {
-              const t = e.target as HTMLTextAreaElement;
-              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
-            }}
-            onKeyUp={(e) => {
-              const t = e.target as HTMLTextAreaElement;
-              cursorPosRef.current = { start: t.selectionStart, end: t.selectionEnd };
-            }}
+            onChange={(e) => setInputText(e.target.value)}
             placeholder="Paste message, village name, or Google Maps link here..."
             className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-slate-400 bg-white resize-none font-medium leading-relaxed"
           />
@@ -483,7 +500,6 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
                 <button
                   key={village}
                   type="button"
-                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleSelectSuggestion(village)}
                   className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
                 >
@@ -515,7 +531,6 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
                     <button
                       key={item.sampler.id}
                       type="button"
-                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelectSampler(item.sampler.id)}
                       className={`p-2 rounded-xl border text-left transition-all cursor-pointer relative ${
                         isSelected
@@ -531,7 +546,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
 
                       <div className="flex items-center gap-1">
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: item.sampler.color }}
                         />
                         <span className="text-xs font-bold text-slate-900 truncate">
@@ -554,7 +569,6 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
               {/* BIG ASSIGN BUTTON */}
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleAssign}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer transition-all mt-1"
               >

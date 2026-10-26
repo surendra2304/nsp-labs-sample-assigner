@@ -67,15 +67,21 @@ console.log('--- TEST 3: WhatsApp Dispatch Format ---');
 function formatWhatsAppDispatchMessage(sample, samplerName) {
   const lines = [];
   lines.push(`@${samplerName.trim()}`);
-  lines.push(`*${sample.company.trim()}*`);
-  lines.push(sample.farmerCode.trim());
-  lines.push(sample.countTons.trim());
+  if (sample.company && sample.company.trim()) {
+    lines.push(`*${sample.company.trim()}*`);
+  }
+  if (sample.farmerCode && sample.farmerCode.trim() && sample.farmerCode.toLowerCase() !== 'general') {
+    lines.push(sample.farmerCode.trim());
+  }
+  if (sample.countTons && sample.countTons.trim() && sample.countTons.toLowerCase() !== 'standard') {
+    lines.push(sample.countTons.trim());
+  }
   if (sample.subLocation && sample.subLocation.trim().length > 0) {
     lines.push(`${sample.locationName.trim()},(${sample.subLocation.trim()})`);
-  } else {
+  } else if (sample.locationName && sample.locationName.trim()) {
     lines.push(sample.locationName.trim());
   }
-  if (sample.ownerPhone) {
+  if (sample.ownerPhone && sample.ownerPhone.trim()) {
     lines.push(sample.ownerPhone.trim());
   }
   if (sample.altContactPhone || sample.altContactName) {
@@ -84,9 +90,13 @@ function formatWhatsAppDispatchMessage(sample, samplerName) {
       lines.push(contactParts.join(' '));
     }
   }
+  if (sample.googleMapsUrl && sample.googleMapsUrl.trim()) {
+    lines.push(sample.googleMapsUrl.trim());
+  }
   return lines.join('\n');
 }
 
+// Case 1: Full Company message
 const expectedOutput = `@Ramesh\n*Sigma sea foods*\nGnr\n90c-2tons\nKuppanapudi,(konalapalli)\n+919014747367\nMadhu 9032259499`;
 const testSample = {
   company: 'Sigma sea foods',
@@ -98,7 +108,31 @@ const testSample = {
   altContactName: 'Madhu',
   altContactPhone: '9032259499'
 };
-
 const actualOutput = formatWhatsAppDispatchMessage(testSample, 'Ramesh');
 assert.strictEqual(actualOutput, expectedOutput);
-console.log('✅ WhatsApp message format matches 100%!');
+console.log('✅ Case 1: Full message format matches 100%!');
+
+// Case 2: ONLY Location (NO fake 'General', 'Standard', 'Today', etc.)
+const locOnlySample = {
+  locationName: 'Vempa',
+  farmerCode: '',
+  countTons: '',
+  company: '',
+  ownerPhone: ''
+};
+const locOnlyOutput = formatWhatsAppDispatchMessage(locOnlySample, 'Ramesh');
+assert.strictEqual(locOnlyOutput, '@Ramesh\nVempa');
+console.log('✅ Case 2: Location-only message has ZERO fake data!');
+
+// Case 3: Google Maps link pasted (NO fake 'General', 'Standard', etc.)
+const mapsSample = {
+  locationName: 'Vempa (Pond Location)',
+  farmerCode: '',
+  countTons: '',
+  company: '',
+  ownerPhone: '',
+  googleMapsUrl: 'https://maps.google.com/?q=16.4950,81.5650'
+};
+const mapsOutput = formatWhatsAppDispatchMessage(mapsSample, 'Ramesh');
+assert.strictEqual(mapsOutput, '@Ramesh\nVempa (Pond Location)\nhttps://maps.google.com/?q=16.4950,81.5650');
+console.log('✅ Case 3: Maps link message has ZERO fake data!');

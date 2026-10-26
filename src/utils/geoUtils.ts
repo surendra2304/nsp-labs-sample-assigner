@@ -203,51 +203,159 @@ export function parseNumericTonnage(countTonsString: string): number {
 }
 
 /**
- * Parses Google Maps URL or coordinate strings from WhatsApp messages
+ * Finds the nearest known regional aquaculture hub to a set of coordinates.
+ * Returns the capitalized village name if within maxKm.
  */
-export function parseLocationFromGoogleMapsString(input: string): { coords?: Coordinates; rawUrl?: string; placeName?: string } {
+export function findNearestKnownHubName(coords: Coordinates, maxKm = 8): string | null {
+  if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return null;
+
+  let closestName: string | null = null;
+  let minDistance = Infinity;
+
+  for (const [hubKey, hubCoords] of Object.entries(REGIONAL_AQUACULTURE_HUBS)) {
+    const d = calculateHaversineDistanceKm(coords, hubCoords);
+    if (d < minDistance) {
+      minDistance = d;
+      closestName = hubKey.charAt(0).toUpperCase() + hubKey.slice(1);
+    }
+  }
+
+  if (minDistance <= maxKm && closestName) {
+    return closestName;
+  }
+  return null;
+}
+
+/**
+ * Parses Google Maps URL, coordinate strings (decimal or DMS), or shared location messages
+ */
+export function parseLocationFromGoogleMapsString(input: string): {
+  coords?: Coordinates;
+  rawUrl?: string;
+  placeName?: string;
+} {
   if (!input) return {};
-  
-  // Check for raw lat,lng
-  const rawCoordsMatch = input.match(/([-+]?\d{1,2}\.\d+)\s*,\s*([-+]?\d{1,3}\.\d+)/);
-  if (rawCoordsMatch) {
+  const trimmed = input.trim();
+
+  // 1. DMS Coordinates (e.g. 16°29'42.0"N 81°33'54.0"E or 16°30'51.8"N, 81°25'43.0"E)
+  const dmsMatch = trimmed.match(
+    /(\d{1,2})[°\s]+(\d{1,2})['\s]+([\d\.]+)"?\s*([NSns])\s*[,;\s]\s*(\d{1,3})[°\s]+(\d{1,2})['\s]+([\d\.]+)"?\s*([EWew])/
+  );
+  if (dmsMatch) {
+    const latDeg = parseFloat(dmsMatch[1]);
+    const latMin = parseFloat(dmsMatch[2]);
+    const latSec = parseFloat(dmsMatch[3]);
+    const latDir = dmsMatch[4].toUpperCase();
+
+    const lngDeg = parseFloat(dmsMatch[5]);
+    const lngMin = parseFloat(dmsMatch[6]);
+    const lngSec = parseFloat(dmsMatch[7]);
+    const lngDir = dmsMatch[8].toUpperCase();
+
+    let lat = latDeg + latMin / 60 + latSec / 3600;
+    if (latDir === 'S') lat = -lat;
+
+    let lng = lngDeg + lngMin / 60 + lngSec / 3600;
+    if (lngDir === 'W') lng = -lng;
+
+    const coords = { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)) };
+    const nearHub = findNearestKnownHubName(coords);
     return {
-      coords: {
-        lat: parseFloat(rawCoordsMatch[1]),
-        lng: parseFloat(rawCoordsMatch[2])
-      }
+      coords,
+      placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${coords.lat}, ${coords.lng})`
     };
   }
 
-  // Check for URL
-  const urlMatch = input.match(/https?:\/\/[^\s]+/);
+  // 2. Decimal coordinates with comma or whitespace: 16.4950, 81.5650 or 16.4950 81.5650
+  const decimalMatch = trimmed.match(/([-+]?\d{1,2}\.\d{3,})\s*[,;\s]\s*([-+]?\d{1,3}\.\d{3,})/);
+  if (decimalMatch && !trimmed.startsWith('http')) {
+    const lat = parseFloat(decimalMatch[1]);
+    const lng = parseFloat(decimalMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      const coords = { lat, lng };
+      const nearHub = findNearestKnownHubName(coords);
+      return {
+        coords,
+        placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${lat}, ${lng})`
+      };
+    }
+  }
+
+  // 3. Check for URL
+  const urlMatch = trimmed.match(/https?:\/\/[^\s]+/i);
   if (urlMatch) {
     const url = urlMatch[0];
-    
-    // Check if query contains coordinates: ?q=lat,lng or @lat,lng
-    const queryCoords = url.match(/[?&]q=([-+]?\d{1,2}\.\d+),([-+]?\d{1,3}\.\d+)/);
+
+    // a) ?q=lat,lng or ?query=lat,lng or &ll=lat,lng or &daddr=lat,lng or &destination=lat,lng
+    const queryCoords = url.match(/[?&](?:q|query|daddr|saddr|ll|destination|loc)=([-+]?\d{1,2}\.\d+)[,\s\+]([-+]?\d{1,3}\.\d+)/i);
     if (queryCoords) {
+      const coords = { lat: parseFloat(queryCoords[1]), lng: parseFloat(queryCoords[2]) };
+      const nearHub = findNearestKnownHubName(coords);
       return {
         rawUrl: url,
-        coords: {
-          lat: parseFloat(queryCoords[1]),
-          lng: parseFloat(queryCoords[2])
-        }
+        coords,
+        placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${coords.lat}, ${coords.lng})`
       };
     }
 
-    const atCoords = url.match(/@([-+]?\d{1,2}\.\d+),([-+]?\d{1,3}\.\d+)/);
+    // b) /place/lat,lng
+    const placeCoords = url.match(/\/place\/([-+]?\d{1,2}\.\d+)[,\s\+]([-+]?\d{1,3}\.\d+)/i);
+    if (placeCoords) {
+      const coords = { lat: parseFloat(placeCoords[1]), lng: parseFloat(placeCoords[2]) };
+      const nearHub = findNearestKnownHubName(coords);
+      return {
+        rawUrl: url,
+        coords,
+        placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${coords.lat}, ${coords.lng})`
+      };
+    }
+
+    // c) /@lat,lng
+    const atCoords = url.match(/@([-+]?\d{1,2}\.\d+)[,\s\+]([-+]?\d{1,3}\.\d+)/i);
     if (atCoords) {
+      const coords = { lat: parseFloat(atCoords[1]), lng: parseFloat(atCoords[2]) };
+      const nearHub = findNearestKnownHubName(coords);
       return {
         rawUrl: url,
-        coords: {
-          lat: parseFloat(atCoords[1]),
-          lng: parseFloat(atCoords[2])
-        }
+        coords,
+        placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${coords.lat}, ${coords.lng})`
       };
     }
 
-    return { rawUrl: url };
+    // d) Check if URL has a place name, e.g. /place/Vempa or ?q=Vempa
+    const placeNameMatch = url.match(/\/place\/([a-zA-Z\s\+]+)(?:[\/\?]|$)/i) || url.match(/[?&]q=([a-zA-Z\s\+]+)(?:[&]|$)/i);
+    let extractedPlace = '';
+    if (placeNameMatch) {
+      extractedPlace = decodeURIComponent(placeNameMatch[1].replace(/\+/g, ' ')).trim();
+    }
+
+    // e) Check if message around URL contains a place name (e.g. "Dropped pin near Vempa, Andhra Pradesh")
+    const nearMatch = trimmed.match(/(?:near|at|in|village)\s+([A-Za-z]+)/i) || trimmed.match(/pin\s+([A-Za-z]+)/i);
+    if (nearMatch && !extractedPlace) {
+      extractedPlace = nearMatch[1].trim();
+    }
+
+    if (extractedPlace) {
+      const hubCoords = findKnownHubCoordinates(extractedPlace);
+      return {
+        rawUrl: url,
+        placeName: extractedPlace,
+        coords: hubCoords || undefined
+      };
+    }
+
+    // f) If coordinates were in text outside the URL
+    if (decimalMatch) {
+      const coords = { lat: parseFloat(decimalMatch[1]), lng: parseFloat(decimalMatch[2]) };
+      const nearHub = findNearestKnownHubName(coords);
+      return {
+        rawUrl: url,
+        coords,
+        placeName: nearHub ? `${nearHub} (Pond Location)` : `Pond Location (${coords.lat}, ${coords.lng})`
+      };
+    }
+
+    return { rawUrl: url, placeName: 'Google Maps Location' };
   }
 
   return {};

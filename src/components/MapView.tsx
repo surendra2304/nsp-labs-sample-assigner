@@ -4,7 +4,6 @@ import { loadGoogleMaps } from '../services/googleMapsService';
 import type { Coordinates, Sampler } from '../types';
 import L from 'leaflet';
 import {
-  Navigation,
   Crosshair
 } from 'lucide-react';
 
@@ -12,7 +11,6 @@ interface MapViewProps {
   onMapClick?: (coords: Coordinates) => void;
   pendingCoords?: Coordinates | null;
   targetSamplerId?: string | null;
-  onMapInteraction?: () => void;
 }
 
 // Default center of the map is Bhimavaram (NSP Labs Delta Headquarters)
@@ -22,8 +20,7 @@ const DEFAULT_MAP_ZOOM = 12;
 export const MapView: React.FC<MapViewProps> = ({
   onMapClick,
   pendingCoords,
-  targetSamplerId,
-  onMapInteraction
+  targetSamplerId
 }) => {
   const { samplers, requests, settings, setSelectedRequest, deleteSampleRequest } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +28,9 @@ export const MapView: React.FC<MapViewProps> = ({
   // Map Engine state: defaults to 'google'
   const [engine, setEngine] = useState<'google' | 'leaflet'>('google');
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid'>('hybrid');
+
+  // Reactive map instance state to trigger marker rendering immediately on load!
+  const [mapInstance, setMapInstance] = useState<any>(null);
 
   // Google Maps refs
   const googleMapRef = useRef<any>(null);
@@ -41,6 +41,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // Leaflet fallback refs
   const leafletMapRef = useRef<L.Map | null>(null);
+  const leafletSamplerMarkersRef = useRef<{ [key: string]: L.Marker }>({});
 
   // Expose delete helper for InfoWindow clicks
   useEffect(() => {
@@ -84,9 +85,7 @@ export const MapView: React.FC<MapViewProps> = ({
               zoomControl: true
             });
 
-            // Keep focus when clicking on map
             map.addListener('click', (e: any) => {
-              if (onMapInteraction) onMapInteraction();
               if (e.latLng && onMapClick) {
                 onMapClick({
                   lat: e.latLng.lat(),
@@ -95,17 +94,9 @@ export const MapView: React.FC<MapViewProps> = ({
               }
             });
 
-            // Keep focus when zooming in/out
-            map.addListener('zoom_changed', () => {
-              if (onMapInteraction) onMapInteraction();
-            });
-
-            // Keep focus when dragging map
-            map.addListener('dragend', () => {
-              if (onMapInteraction) onMapInteraction();
-            });
-
             googleMapRef.current = map;
+            // Reactive state trigger so sampler markers render IMMEDIATELY before typing!
+            setMapInstance(map);
           }
         })
         .catch((err) => {
@@ -130,7 +121,6 @@ export const MapView: React.FC<MapViewProps> = ({
         }).addTo(lMap);
 
         lMap.on('click', (e: L.LeafletMouseEvent) => {
-          if (onMapInteraction) onMapInteraction();
           if (onMapClick) {
             onMapClick({
               lat: e.latlng.lat,
@@ -139,22 +129,15 @@ export const MapView: React.FC<MapViewProps> = ({
           }
         });
 
-        lMap.on('zoomend', () => {
-          if (onMapInteraction) onMapInteraction();
-        });
-
-        lMap.on('moveend', () => {
-          if (onMapInteraction) onMapInteraction();
-        });
-
         leafletMapRef.current = lMap;
+        setMapInstance(lMap);
       }
     }
 
     return () => {
       isMounted = false;
     };
-  }, [engine, settings.googleMapsApiKey, onMapClick, onMapInteraction]);
+  }, [engine, settings.googleMapsApiKey, onMapClick]);
 
   // Handle Map Type Change (Roadmap vs Hybrid)
   useEffect(() => {
@@ -163,24 +146,8 @@ export const MapView: React.FC<MapViewProps> = ({
     }
   }, [mapType, engine]);
 
-  // Focus map on a specific sampler
-  const handlePanToSampler = (sampler: Sampler) => {
-    if (onMapInteraction) onMapInteraction();
-    if (engine === 'google' && googleMapRef.current) {
-      googleMapRef.current.panTo(sampler.currentLocation.coords);
-      googleMapRef.current.setZoom(13);
-    } else if (engine === 'leaflet' && leafletMapRef.current) {
-      leafletMapRef.current.setView(
-        [sampler.currentLocation.coords.lat, sampler.currentLocation.coords.lng],
-        13
-      );
-    }
-  };
-
   // Center on Bhimavaram or fit active points
   const handleCenterOrFit = useCallback(() => {
-    if (onMapInteraction) onMapInteraction();
-
     if (pendingCoords && pendingCoords.lat) {
       // Zoom to fit target pond and nearest sampler
       if (engine === 'google' && googleMapRef.current && (window as any).google) {
@@ -199,15 +166,15 @@ export const MapView: React.FC<MapViewProps> = ({
         leafletMapRef.current.setView([BHIMAVARAM_CENTER.lat, BHIMAVARAM_CENTER.lng], DEFAULT_MAP_ZOOM);
       }
     }
-  }, [engine, samplers, pendingCoords, onMapInteraction]);
+  }, [engine, samplers, pendingCoords]);
 
-  // RENDER MARKERS (Google Maps)
+  // RENDER MARKERS (Google Maps - runs as soon as mapInstance is ready!)
   useEffect(() => {
-    if (engine === 'google' && googleMapRef.current && (window as any).google) {
+    if (engine === 'google' && (googleMapRef.current || mapInstance) && (window as any).google) {
       const g = (window as any).google;
-      const map = googleMapRef.current;
+      const map = googleMapRef.current || mapInstance;
 
-      // 1. Plot or Update Samplers
+      // 1. Plot or Update Samplers (Prominent big markers with clear full names!)
       samplers.forEach((sampler) => {
         const isTarget = targetSamplerId === sampler.id;
         let marker = googleSamplerMarkersRef.current[sampler.id];
@@ -219,29 +186,28 @@ export const MapView: React.FC<MapViewProps> = ({
             title: `${sampler.name} - At: ${sampler.currentLocation.name}`,
             icon: {
               path: g.maps.SymbolPath.CIRCLE,
-              scale: isTarget ? 15 : 12,
+              scale: isTarget ? 24 : 20, // Large, high-visibility marker
               fillColor: sampler.color,
               fillOpacity: 1,
               strokeColor: '#ffffff',
-              strokeWeight: isTarget ? 4 : 2.5
+              strokeWeight: isTarget ? 4 : 3
             },
             label: {
-              text: sampler.name[0],
+              text: sampler.name, // Full name clearly visible on marker
               color: '#ffffff',
               fontWeight: '900',
-              fontSize: '13px'
+              fontSize: '12px'
             },
-            zIndex: isTarget ? 150 : 80
+            zIndex: isTarget ? 160 : 100
           });
 
           marker.addListener('click', () => {
-            if (onMapInteraction) onMapInteraction();
             const info = new g.maps.InfoWindow({
               content: `
-                <div style="font-family: sans-serif; padding: 4px;">
-                  <b style="font-size: 14px; color: #1e293b;">${sampler.name}</b><br/>
-                  <span style="font-size: 12px; color: #64748b;">📍 Current: <b style="color: #0f172a;">${sampler.currentLocation.name}</b></span><br/>
-                  <span style="font-size: 11px; color: #94a3b8;">🏠 Home Base: ${sampler.homeBase.name}</span>
+                <div style="font-family: sans-serif; padding: 6px; font-size: 13px;">
+                  <b style="font-size: 15px; color: ${sampler.color};">📍 ${sampler.name}</b><br/>
+                  <span style="color: #475569;">📍 Current: <b>${sampler.currentLocation.name}</b></span><br/>
+                  <span style="color: #64748b; font-size: 11px;">🏠 Home Base: ${sampler.homeBase.name}</span>
                 </div>`
             });
             info.open(map, marker);
@@ -254,13 +220,19 @@ export const MapView: React.FC<MapViewProps> = ({
           marker.setTitle(`${sampler.name} - At: ${sampler.currentLocation.name}`);
           marker.setIcon({
             path: g.maps.SymbolPath.CIRCLE,
-            scale: isTarget ? 15 : 12,
+            scale: isTarget ? 24 : 20,
             fillColor: sampler.color,
             fillOpacity: 1,
             strokeColor: '#ffffff',
-            strokeWeight: isTarget ? 4 : 2.5
+            strokeWeight: isTarget ? 4 : 3
           });
-          marker.setZIndex(isTarget ? 150 : 80);
+          marker.setLabel({
+            text: sampler.name,
+            color: '#ffffff',
+            fontWeight: '900',
+            fontSize: '12px'
+          });
+          marker.setZIndex(isTarget ? 160 : 100);
         }
       });
 
@@ -275,7 +247,6 @@ export const MapView: React.FC<MapViewProps> = ({
 
       // Plot valid assigned ponds (if any)
       requests.forEach((req) => {
-        // Exclude legacy mock "Gnr Kuppanapudi"
         if (
           req.farmerCode?.toLowerCase() === 'gnr' ||
           req.locationName?.toLowerCase().includes('kuppanapudi')
@@ -295,12 +266,12 @@ export const MapView: React.FC<MapViewProps> = ({
           marker = new g.maps.Marker({
             position: req.coords,
             map,
-            title: `${req.locationName} (${req.farmerCode}) - Assigned to ${assignedSampler?.name || 'Sampler'}`,
+            title: `${req.locationName} - Assigned to ${assignedSampler?.name || 'Sampler'}`,
             icon: {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
               fillColor: pinColor,
               fillOpacity: 1,
-              scale: 1.4,
+              scale: 1.5,
               strokeColor: '#ffffff',
               strokeWeight: 2,
               anchor: new g.maps.Point(12, 22)
@@ -309,13 +280,13 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           marker.addListener('click', () => {
-            if (onMapInteraction) onMapInteraction();
             setSelectedRequest(req);
             const info = new g.maps.InfoWindow({
               content: `
                 <div style="font-family: sans-serif; padding: 4px; max-width: 200px;">
-                  <b style="color: ${pinColor}; font-size: 13px;">${req.farmerCode} - ${req.locationName}</b><br/>
-                  <span style="font-size: 11px; color: #475569;">Count: <b>${req.countTons}</b></span><br/>
+                  <b style="color: ${pinColor}; font-size: 13px;">${req.locationName}</b><br/>
+                  ${req.farmerCode ? `<span style="font-size: 11px; color: #475569;">Farmer: <b>${req.farmerCode}</b></span><br/>` : ''}
+                  ${req.countTons ? `<span style="font-size: 11px; color: #475569;">Count: <b>${req.countTons}</b></span><br/>` : ''}
                   <span style="font-size: 11px; color: #475569;">Sampler: <b>@${assignedSampler?.name || 'Assigned'}</b></span><br/>
                   ${req.ownerPhone ? `<a href="tel:${req.ownerPhone}" style="color: #0284c7; font-size: 11px;">📞 ${req.ownerPhone}</a><br/>` : ''}
                   <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #e2e8f0;">
@@ -365,7 +336,6 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           pMarker.addListener('dragend', (e: any) => {
-            if (onMapInteraction) onMapInteraction();
             if (e.latLng && onMapClick) {
               onMapClick({
                 lat: e.latLng.lat(),
@@ -381,8 +351,31 @@ export const MapView: React.FC<MapViewProps> = ({
         googlePendingMarkerRef.current.setMap(null);
         googlePendingMarkerRef.current = null;
       }
+    } else if (engine === 'leaflet' && (leafletMapRef.current || mapInstance)) {
+      const lMap = leafletMapRef.current || mapInstance;
+
+      // Leaflet sampler markers with bold visible badges
+      samplers.forEach((sampler) => {
+        let lMarker = leafletSamplerMarkersRef.current[sampler.id];
+        const isTarget = targetSamplerId === sampler.id;
+
+        const icon = L.divIcon({
+          html: `<div style="background-color: ${sampler.color}; color: white; padding: 4px 10px; border-radius: 20px; font-weight: 900; font-size: 12px; border: 2.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); white-space: nowrap; ${isTarget ? 'transform: scale(1.15); ring: 3px solid #60a5fa;' : ''}">${sampler.name}</div>`,
+          className: 'sampler-badge-marker',
+          iconSize: [70, 26],
+          iconAnchor: [35, 13]
+        });
+
+        if (!lMarker) {
+          lMarker = L.marker([sampler.currentLocation.coords.lat, sampler.currentLocation.coords.lng], { icon }).addTo(lMap);
+          leafletSamplerMarkersRef.current[sampler.id] = lMarker;
+        } else {
+          lMarker.setLatLng([sampler.currentLocation.coords.lat, sampler.currentLocation.coords.lng]);
+          lMarker.setIcon(icon);
+        }
+      });
     }
-  }, [engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick, onMapInteraction]);
+  }, [mapInstance, engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick]);
 
   // ROUTE LINES: Draw route between target sampler and pending pond
   useEffect(() => {
@@ -425,21 +418,14 @@ export const MapView: React.FC<MapViewProps> = ({
   return (
     <div className="relative w-full h-full bg-slate-900 transition-all">
       {/* Map Canvas */}
-      <div
-        ref={mapContainerRef}
-        className="w-full h-full"
-        onPointerUp={() => onMapInteraction?.()}
-        onTouchEnd={() => onMapInteraction?.()}
-      />
+      <div ref={mapContainerRef} className="w-full h-full" />
 
       {/* Top Right Controls: Satellite toggle / Center on Bhimavaram */}
       <div className="absolute top-14 right-3 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">
         {/* Satellite / Hybrid toggle */}
         <button
           type="button"
-          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            if (onMapInteraction) onMapInteraction();
             setMapType(mapType === 'hybrid' ? 'roadmap' : 'hybrid');
           }}
           className={`px-2 py-1 rounded-lg font-bold transition-all flex items-center gap-1 cursor-pointer ${
@@ -455,7 +441,6 @@ export const MapView: React.FC<MapViewProps> = ({
         {/* Center Bhimavaram / Fit */}
         <button
           type="button"
-          onMouseDown={(e) => e.preventDefault()}
           onClick={handleCenterOrFit}
           title="Center on Bhimavaram / Fit points"
           className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all cursor-pointer"

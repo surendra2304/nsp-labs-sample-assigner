@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { MapView } from './components/MapView';
 import { BottomDispatchBox } from './components/BottomDispatchBox';
@@ -23,17 +23,6 @@ const MainLayout: React.FC = () => {
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
   const [targetSamplerId, setTargetSamplerId] = useState<string | null>(null);
 
-  // Ref to hold the textarea focus restore function
-  const focusRestoreRef = useRef<() => void>(() => {});
-
-  const handleRegisterFocus = useCallback((fn: () => void) => {
-    focusRestoreRef.current = fn;
-  }, []);
-
-  const handleMapInteraction = useCallback(() => {
-    focusRestoreRef.current();
-  }, []);
-
   return (
     <div className="relative w-screen h-[100dvh] overflow-hidden font-sans select-none bg-slate-900">
       {/* 1. FULL-SCREEN GOOGLE MAP IN THE BACKGROUND (Default: Bhimavaram) */}
@@ -44,7 +33,6 @@ const MainLayout: React.FC = () => {
           onMapClick={(coords) => {
             setPendingCoords(coords);
           }}
-          onMapInteraction={handleMapInteraction}
         />
       </div>
 
@@ -67,7 +55,6 @@ const MainLayout: React.FC = () => {
         <div className="pointer-events-auto flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-lg text-white">
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (window.confirm('Reset all samplers back to their home bases for the start of the day?')) {
                 resetAllSamplersToHome();
@@ -82,7 +69,6 @@ const MainLayout: React.FC = () => {
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsSamplersOpen(true)}
             className="px-2.5 py-1 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
             title="Manage and Edit Samplers"
@@ -93,7 +79,6 @@ const MainLayout: React.FC = () => {
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsSettingsOpen(true)}
             className="p-1.5 hover:bg-slate-800 text-slate-200 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
             title="Settings & Data Backup / Export / Import"
@@ -110,7 +95,6 @@ const MainLayout: React.FC = () => {
             onLocationChange={(coords) => setPendingCoords(coords)}
             onTargetSamplerChange={(samplerId) => setTargetSamplerId(samplerId)}
             targetSamplerId={targetSamplerId}
-            onRegisterFocusHandler={handleRegisterFocus}
           />
         </div>
       </div>

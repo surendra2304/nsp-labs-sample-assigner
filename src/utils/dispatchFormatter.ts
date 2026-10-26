@@ -29,28 +29,41 @@ export function formatWhatsAppDispatchMessage(
   }
 
   // 3. Farmer / Lot Code (only if present)
-  if (sample.farmerCode && sample.farmerCode.trim() && sample.farmerCode !== 'General') {
+  if (
+    sample.farmerCode &&
+    sample.farmerCode.trim() &&
+    sample.farmerCode.toLowerCase() !== 'general'
+  ) {
     lines.push(sample.farmerCode.trim());
   }
 
   // 4. Count & Tonnage (only if present)
-  if (sample.countTons && sample.countTons.trim() && sample.countTons !== 'Standard') {
+  if (
+    sample.countTons &&
+    sample.countTons.trim() &&
+    sample.countTons.toLowerCase() !== 'standard'
+  ) {
     lines.push(sample.countTons.trim());
   }
 
-  // 5. Location with sublocation/landmark in parentheses
+  // 5. Rate specs if present in input
+  if (sample.rateSpecs && sample.rateSpecs.trim()) {
+    lines.push(sample.rateSpecs.trim());
+  }
+
+  // 6. Location with sublocation/landmark in parentheses
   if (sample.subLocation && sample.subLocation.trim().length > 0) {
     lines.push(`${sample.locationName.trim()},(${sample.subLocation.trim()})`);
   } else if (sample.locationName && sample.locationName.trim()) {
     lines.push(sample.locationName.trim());
   }
 
-  // 6. Pond Owner Phone Number
+  // 7. Pond Owner Phone Number
   if (sample.ownerPhone && sample.ownerPhone.trim()) {
     lines.push(sample.ownerPhone.trim());
   }
 
-  // 7. Alternate Contact Person & Number (e.g., "Madhu 9032259499")
+  // 8. Alternate Contact Person & Number (e.g., "Madhu 9032259499")
   if (sample.altContactPhone || sample.altContactName) {
     const contactParts = [sample.altContactName?.trim(), sample.altContactPhone?.trim()].filter(Boolean);
     if (contactParts.length > 0) {
@@ -58,13 +71,11 @@ export function formatWhatsAppDispatchMessage(
     }
   }
 
-  // Optional: Direct Google Maps navigation link
-  if (includeMapLink) {
-    if (sample.googleMapsUrl) {
-      lines.push(`📍 Maps: ${sample.googleMapsUrl}`);
-    } else if (sample.coords && sample.coords.lat && sample.coords.lng) {
-      lines.push(`📍 Maps: https://www.google.com/maps?q=${sample.coords.lat},${sample.coords.lng}`);
-    }
+  // 9. Direct Google Maps navigation link (if link was pasted or requested)
+  if (sample.googleMapsUrl && sample.googleMapsUrl.trim()) {
+    lines.push(sample.googleMapsUrl.trim());
+  } else if (includeMapLink && sample.coords && sample.coords.lat && sample.coords.lng) {
+    lines.push(`https://www.google.com/maps?q=${sample.coords.lat},${sample.coords.lng}`);
   }
 
   return lines.join('\n');
