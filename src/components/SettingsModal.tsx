@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { INITIAL_SAMPLERS } from '../context/AppContext';
+import type { SampleRequest } from '../types';
 import {
   Settings,
   X,
@@ -8,7 +9,6 @@ import {
   Upload,
   Copy,
   Check,
-  RotateCcw,
   Database,
   FileJson,
   CheckCircle2
@@ -20,7 +20,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { samplers, requests, setAllSamplers, resetAllSamplersToHome } = useApp();
+  const { samplers, requests, setAllSamplers, setAllRequests, resetAllSamplersToHome } = useApp();
 
   const [copied, setCopied] = useState(false);
   const [importJson, setImportJson] = useState('');
@@ -70,6 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     try {
       const parsed = JSON.parse(importJson.trim());
       let importedSamplers = null;
+      let importedRequests: SampleRequest[] = [];
 
       if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
         // Direct samplers array
@@ -77,10 +78,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       } else if (parsed.samplers && Array.isArray(parsed.samplers)) {
         // Full backup object
         importedSamplers = parsed.samplers;
+        if (Array.isArray(parsed.requests)) {
+          importedRequests = parsed.requests.filter(
+            (r: any) => r && typeof r === 'object' && r.id && r.coords && r.coords.lat
+          );
+        }
       }
 
       if (importedSamplers) {
         setAllSamplers(importedSamplers);
+        if (importedRequests.length > 0) {
+          setAllRequests(importedRequests);
+        }
         setImportSuccess(true);
         setImportJson('');
         setTimeout(() => setImportSuccess(false), 3000);

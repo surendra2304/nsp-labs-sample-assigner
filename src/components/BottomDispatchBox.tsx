@@ -330,6 +330,10 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
     const sampler = samplers.find((s) => s.id === targetSamplerId);
     if (!sampler) return;
 
+    // Record the distance/duration we actually ranked this sampler by, so the
+    // "Today's Samples" list can show it later
+    const chosenDist = distances.find((d) => d.sampler.id === sampler.id);
+
     const assignedSample: Omit<SampleRequest, 'id' | 'createdAt' | 'status'> = {
       harvestDate: harvestDate.trim(),
       farmerCode: farmerCode.trim(),
@@ -342,6 +346,8 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
       ownerPhone: ownerPhone.trim(),
       company: detectedCompany.trim(),
       assignedSamplerId: sampler.id,
+      distanceKm: chosenDist?.distanceKm,
+      estimatedDuration: chosenDist?.durationText,
       rawMessage: inputText
     };
 

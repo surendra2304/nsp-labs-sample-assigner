@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { loadGoogleMaps } from '../services/googleMapsService';
-import type { Coordinates, Sampler } from '../types';
+import type { Coordinates } from '../types';
 import L from 'leaflet';
 import {
   Crosshair
@@ -9,6 +9,8 @@ import {
 
 interface MapViewProps {
   onMapClick?: (coords: Coordinates) => void;
+  /** Fired ONLY on zoom (pinch, scroll wheel, +/- controls) — used to dismiss the mobile keyboard */
+  onMapZoom?: () => void;
   pendingCoords?: Coordinates | null;
   targetSamplerId?: string | null;
 }
@@ -19,10 +21,11 @@ const DEFAULT_MAP_ZOOM = 12;
 
 export const MapView: React.FC<MapViewProps> = ({
   onMapClick,
+  onMapZoom,
   pendingCoords,
   targetSamplerId
 }) => {
-  const { samplers, requests, settings, setSelectedRequest, deleteSampleRequest } = useApp();
+  const { samplers, requests, settings, deleteSampleRequest } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // Map Engine state: defaults to 'google'
@@ -94,6 +97,11 @@ export const MapView: React.FC<MapViewProps> = ({
               }
             });
 
+            // Dismiss keyboard when zooming in/out to view the map
+            map.addListener('zoom_changed', () => {
+              if (onMapZoom) onMapZoom();
+            });
+
             googleMapRef.current = map;
             // Reactive state trigger so sampler markers render IMMEDIATELY before typing!
             setMapInstance(map);
@@ -129,6 +137,10 @@ export const MapView: React.FC<MapViewProps> = ({
           }
         });
 
+        lMap.on('zoomend', () => {
+          if (onMapZoom) onMapZoom();
+        });
+
         leafletMapRef.current = lMap;
         setMapInstance(lMap);
       }
@@ -137,7 +149,7 @@ export const MapView: React.FC<MapViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [engine, settings.googleMapsApiKey, onMapClick]);
+  }, [engine, settings.googleMapsApiKey, onMapClick, onMapZoom]);
 
   // Handle Map Type Change (Roadmap vs Hybrid)
   useEffect(() => {
@@ -236,15 +248,6 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       });
 
-      // 2. Clean up removed or legacy requests
-      const currentReqIds = new Set(requests.map((r) => r.id));
-      Object.keys(googleRequestMarkersRef.current).forEach((id) => {
-        if (!currentReqIds.has(id)) {
-          googleRequestMarkersRef.current[id].setMap(null);
-          delete googleRequestMarkersRef.current[id];
-        }
-      });
-
       // Plot valid assigned ponds (if any)
       requests.forEach((req) => {
         if (
@@ -280,7 +283,6 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           marker.addListener('click', () => {
-            setSelectedRequest(req);
             const info = new g.maps.InfoWindow({
               content: `
                 <div style="font-family: sans-serif; padding: 4px; max-width: 200px;">
@@ -321,17 +323,17 @@ export const MapView: React.FC<MapViewProps> = ({
             position: pendingCoords,
             map,
             draggable: true,
-            title: 'Target Pond (Drag onto exact pond bund)',
+            title: 'Drop/Drag Pond Location',
+            animation: g.maps.Animation.DROP,
             icon: {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-              fillColor: '#ea580c', // Bright orange
+              fillColor: '#ef4444', // Prominent Red Target Marker
               fillOpacity: 1,
-              scale: 1.8,
+              scale: 2.2,
               strokeColor: '#ffffff',
-              strokeWeight: 2.5,
+              strokeWeight: 3,
               anchor: new g.maps.Point(12, 22)
             },
-            animation: g.maps.Animation.DROP,
             zIndex: 200
           });
 
@@ -345,7 +347,6 @@ export const MapView: React.FC<MapViewProps> = ({
           });
 
           googlePendingMarkerRef.current = pMarker;
-          map.panTo(pendingCoords);
         }
       } else if (googlePendingMarkerRef.current) {
         googlePendingMarkerRef.current.setMap(null);
@@ -375,7 +376,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       });
     }
-  }, [mapInstance, engine, samplers, requests, pendingCoords, targetSamplerId, setSelectedRequest, onMapClick]);
+  }, [mapInstance, engine, samplers, requests, pendingCoords, targetSamplerId, onMapClick]);
 
   // ROUTE LINES: Draw route between target sampler and pending pond
   useEffect(() => {
@@ -383,14 +384,10 @@ export const MapView: React.FC<MapViewProps> = ({
       const g = (window as any).google;
       const map = googleMapRef.current;
 
-      // Draw route line from Target Sampler to Pending Pond
       if (targetSamplerId && pendingCoords && pendingCoords.lat) {
         const sampler = samplers.find((s) => s.id === targetSamplerId);
         if (sampler) {
-          const path = [
-            sampler.currentLocation.coords,
-            pendingCoords
-          ];
+          const path = [sampler.currentLocation.coords, pendingCoords];
 
           if (!googleRoutePolylineRef.current) {
             googleRoutePolylineRef.current = new g.maps.Polyline({

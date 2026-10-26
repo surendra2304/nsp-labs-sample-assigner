@@ -57,14 +57,38 @@ Madhu 9032259499
 * **"Copy Text"** button: Copies formatted message to clipboard.
 
 ### 6. ⚡ Batch Multi-Sample Route Optimizer (TSP / VRP)
-* Paste 4–6 messages at once (e.g., *Narasapuram, Mogalthuru, Vempa, Bhimavaram, Undi*).
+Tap **Batch** in the top bar and paste 4–6 messages at once (e.g., *Narasapuram, Mogalthuru, Vempa, Bhimavaram, Undi*).
 * Automatically solves the optimal multi-sampler route chains (e.g., Sampler 1 covers `Narasapuram ➔ Mogalthuru ➔ Vempa`; Sampler 2 covers `Bhimavaram ➔ Undi`).
-* Minimizes total travel distance and driving time for all samplers.
+* Minimizes total travel distance for all samplers, shows a per-sampler stop count and km total.
+* Preview, WhatsApp-send, or copy each generated dispatch message before committing.
+* **Apply All** writes every sample into the app and moves each sampler to their last pond.
 
-### 7. 👥 Sampler & Company Management
+### 7. 👥 Sampler Management
+* Add / edit / delete samplers (name, phone, home town, duty status, map pin colour) from the **Samplers** modal.
 * Update any sampler's location manually anytime (quick pick regional hubs or custom names).
-* **"Reset All to Home Bases"** button at the start of each morning.
-* Add/edit samplers and harvesting companies (e.g. *Sigma sea foods*, *Devi Sea Foods*, etc.).
+* **"Reset Bases"** button at the start of each morning — resets every sampler to their home town and clears the day's samples.
+* The harvesting **company** is picked from the dropdown in the dispatch box (or read from the `*company*` line of a pasted message).
+
+### 8. 📋 Today's Samples Panel
+Tap **Today** in the top bar (a green badge shows the live count) to see everything dispatched today:
+* Re-send or re-copy any WhatsApp dispatch message **after** the dispatch box has moved on.
+* Filter by sampler, see total tonnage and collected count.
+* One-tap **Call** the pond owner, mark a sample **Collected**, or remove a mistaken pin.
+* Deleting a sampler automatically returns their samples to *Pending* so nothing points at a missing person.
+
+---
+
+## 🧭 How a normal day flows
+
+1. **Morning** — tap **Reset Bases** so Ramesh/Suresh/Naidu start from Bhimavaram / Narasapuram / Palakol.
+2. A company WhatsApps a harvest request → **paste it into the bottom box** (or type a village name, or paste a Maps link).
+3. The map drops an orange pin, ranks every sampler by road distance, and pre-selects the **★ Nearest** one.
+4. Tap **Assign** — the sample is saved, the sampler's marker jumps to the pond, and the formatted WhatsApp message is ready to **Send** or **Copy**.
+5. The *next* request now measures distances **from that pond**, so samplers chain naturally across the delta.
+6. Need several at once? Tap **Batch**, paste them all, **Calculate Best Multi-Stop Routes**, then **Apply All**.
+7. Lost the message after moving on? Tap **Today** to re-send, mark collected, or delete any sample.
+
+> **Keyboard & map:** while typing, a plain map tap keeps your cursor and keyboard; a **pinch/scroll zoom hides the keyboard** so you can see the pond — tap the box again to keep typing.
 
 ---
 
@@ -115,8 +139,9 @@ npx cap open android
 
 ## ⚙️ Configuration
 
-* **Google Maps API Key**: Configured in `.env` as `VITE_GOOGLE_MAPS_API_KEY` or editable in the app settings modal anytime.
-* Local storage preserves all samplers, companies, and assignments locally on your father's phone or computer.
+* **Google Maps API Key**: set it in `.env` as `VITE_GOOGLE_MAPS_API_KEY`, or edit it live in **Settings → Google Maps API Key** (show/hide toggle, saves instantly and reloads the map). Without a valid key the app automatically falls back to OpenStreetMap tiles plus an offline road-distance estimate, so it never hard-fails.
+* **Data backup**: **Settings → Export** copies or downloads a JSON backup containing **both samplers and today's samples**; **Import** restores both. A plain samplers-array JSON is still accepted for backwards compatibility.
+* Local storage preserves all samplers, companies, and samples locally on your phone or computer. Corrupt saved data is detected and defaults are restored instead of white-screening the app.
 
 ---
 
