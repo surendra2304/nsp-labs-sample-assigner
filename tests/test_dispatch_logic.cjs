@@ -182,11 +182,9 @@ test('Extracts a sub-location in parentheses', () => {
   assert.strictEqual(p.subLocation, 'konalapalli');
 });
 
-test('Defaults the harvest date to today when missing', () => {
+test('Leaves harvest date blank when missing from input', () => {
   const p = parseCompanyMessage('Gnr\n90c-2tons\nVempa\n9703051223');
-  const today = new Date();
-  const expected = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getFullYear()).slice(-2)}`;
-  assert.strictEqual(p.harvestDate, expected);
+  assert.strictEqual(p.harvestDate, '', 'harvest date must be blank when not provided');
 });
 
 test('Never returns a location-less sample (falls back to Bhimavaram)', () => {

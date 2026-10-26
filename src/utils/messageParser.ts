@@ -17,8 +17,9 @@ export interface ParsedCompanyMessage {
 
 /**
  * Parses an incoming single raw message from a harvesting company.
+ * Strictly extracts ONLY details present in the user's message — NO fake defaults!
  */
-export function parseCompanyMessage(rawText: string, defaultCompany = 'Sigma sea foods'): ParsedCompanyMessage {
+export function parseCompanyMessage(rawText: string, _defaultCompany = ''): ParsedCompanyMessage {
   const text = rawText.trim();
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
@@ -110,15 +111,6 @@ export function parseCompanyMessage(rawText: string, defaultCompany = 'Sigma sea
     }
   }
 
-  // Fallback: if today's date not found, default to today
-  if (!harvestDate) {
-    const today = new Date();
-    const dd = String(today.getDate()).padStart(2, '0');
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const yy = String(today.getFullYear()).slice(-2);
-    harvestDate = `${dd}/${mm}/${yy}`;
-  }
-
   // Lookup coords for location if still missing
   if (!coords && locationName) {
     const foundCoords = findKnownHubCoordinates(locationName);
@@ -135,15 +127,15 @@ export function parseCompanyMessage(rawText: string, defaultCompany = 'Sigma sea
   const tonnageNumber = parseNumericTonnage(countTons);
 
   return {
-    harvestDate,
-    farmerCode: farmerCode || 'General',
-    countTons: countTons || 'Standard',
+    harvestDate: harvestDate.trim(),
+    farmerCode: farmerCode.trim(),
+    countTons: countTons.trim(),
     tonnageNumber,
-    rateSpecs: rateSpecs || '-',
-    locationName: locationName || 'Unknown Location',
-    subLocation,
-    ownerPhone,
-    googleMapsUrl,
+    rateSpecs: rateSpecs.trim(),
+    locationName: locationName.trim(),
+    subLocation: subLocation.trim(),
+    ownerPhone: ownerPhone.trim(),
+    googleMapsUrl: googleMapsUrl.trim(),
     coords,
     rawMessage: text
   };
@@ -151,9 +143,8 @@ export function parseCompanyMessage(rawText: string, defaultCompany = 'Sigma sea
 
 /**
  * Splits and parses multiple harvest messages pasted together.
- * Commonly companies send 3-6 harvest requests in one WhatsApp blast.
  */
-export function parseMultipleCompanyMessages(bulkText: string, defaultCompany = 'Sigma sea foods'): ParsedCompanyMessage[] {
+export function parseMultipleCompanyMessages(bulkText: string, defaultCompany = ''): ParsedCompanyMessage[] {
   const normalized = bulkText.replace(/\r\n/g, '\n');
   
   // Split on "Harvest date" if present multiple times

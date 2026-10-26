@@ -12,6 +12,10 @@ export function loadGoogleMaps(apiKey: string): Promise<any> {
     return Promise.resolve(win.google);
   }
 
+  if (!apiKey || !apiKey.trim()) {
+    return Promise.reject(new Error('No Google Maps API key provided'));
+  }
+
   if (googleMapsPromise) {
     return googleMapsPromise;
   }

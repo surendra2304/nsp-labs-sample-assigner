@@ -181,7 +181,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </p>
             <textarea
               rows={3}
-              placeholder="Paste exported backup JSON here..."
               value={importJson}
               onChange={(e) => setImportJson(e.target.value)}
               className="w-full p-2.5 bg-white border border-slate-300 rounded-lg outline-none font-mono text-[11px] text-slate-800 resize-none focus:border-blue-500"

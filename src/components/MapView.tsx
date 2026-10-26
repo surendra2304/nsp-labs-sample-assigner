@@ -28,8 +28,10 @@ export const MapView: React.FC<MapViewProps> = ({
   const { samplers, requests, settings, deleteSampleRequest } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
-  // Map Engine state: defaults to 'google'
-  const [engine, setEngine] = useState<'google' | 'leaflet'>('google');
+  // Map Engine state: defaults to leaflet if no API key is provided
+  const [engine, setEngine] = useState<'google' | 'leaflet'>(() => {
+    return settings.googleMapsApiKey && settings.googleMapsApiKey.trim() ? 'google' : 'leaflet';
+  });
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid'>('hybrid');
 
   // Reactive map instance state to trigger marker rendering immediately on load!
@@ -70,7 +72,7 @@ export const MapView: React.FC<MapViewProps> = ({
     let isMounted = true;
     if (!mapContainerRef.current) return;
 
-    if (engine === 'google') {
+    if (engine === 'google' && settings.googleMapsApiKey && settings.googleMapsApiKey.trim()) {
       loadGoogleMaps(settings.googleMapsApiKey)
         .then((g: any) => {
           if (!isMounted || !mapContainerRef.current) return;
@@ -82,6 +84,7 @@ export const MapView: React.FC<MapViewProps> = ({
               center: BHIMAVARAM_CENTER,
               zoom: DEFAULT_MAP_ZOOM,
               mapTypeId: mapType,
+              gestureHandling: 'greedy', // Enables 1-finger panning on mobile screens without 2-finger blocking
               streetViewControl: false,
               mapTypeControl: false,
               fullscreenControl: false,
@@ -415,7 +418,7 @@ export const MapView: React.FC<MapViewProps> = ({
   return (
     <div className="relative w-full h-full bg-slate-900 transition-all">
       {/* Map Canvas */}
-      <div ref={mapContainerRef} className="w-full h-full" />
+      <div ref={mapContainerRef} className="w-full h-full" style={{ touchAction: 'pan-x pan-y' }} />
 
       {/* Top Right Controls: Satellite toggle / Center on Bhimavaram */}
       <div className="absolute top-14 right-3 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-md p-1 rounded-xl shadow-lg border border-slate-700/80 text-white text-xs">

@@ -494,8 +494,7 @@ export const BottomDispatchBox: React.FC<BottomDispatchBoxProps> = ({
             rows={2}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Paste message, village name, or Google Maps link here..."
-            className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-slate-400 bg-white resize-none font-medium leading-relaxed"
+            className="w-full text-xs sm:text-sm p-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all bg-white resize-none font-medium leading-relaxed"
           />
 
           {/* AUTOCOMPLETE SUGGESTION CHIPS (e.g. typing NAR -> Narasapuram, BHI -> Bhimavaram) */}

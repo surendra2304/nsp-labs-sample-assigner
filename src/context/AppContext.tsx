@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import type { Sampler, Company, SampleRequest, AppSettings, Coordinates } from '../types';
 import { REGIONAL_AQUACULTURE_HUBS, parseNumericTonnage } from '../utils/geoUtils';
 
-const DEFAULT_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyB-YwGXSHF_lJEp18w6-Z4i2ZJhTQQSteI';
+const DEFAULT_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 export const INITIAL_SAMPLERS: Sampler[] = [
   {
@@ -55,13 +55,8 @@ export const INITIAL_SAMPLERS: Sampler[] = [
   }
 ];
 
-export const INITIAL_COMPANIES: Company[] = [
-  { id: 'comp-1', name: 'Sigma sea foods', whatsappGroup: 'Sigma Sea Foods Group' },
-  { id: 'comp-2', name: 'Devi Sea Foods', whatsappGroup: 'Devi Sea Foods Lab Group' },
-  { id: 'comp-3', name: 'Apex Frozen Foods', whatsappGroup: 'Apex Aquaculture Group' },
-  { id: 'comp-4', name: 'Sandhya Aqua', whatsappGroup: 'Sandhya Aqua Testing' },
-  { id: 'comp-5', name: 'NSP Lab Direct', whatsappGroup: 'NSP Samplers' }
-];
+// Starts completely blank — user can add them if they want
+export const INITIAL_COMPANIES: Company[] = [];
 
 interface AppContextType {
   samplers: Sampler[];
@@ -82,6 +77,8 @@ interface AppContextType {
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   deleteSampleRequest: (id: string) => void;
   markSampleCollected: (id: string) => void;
+  addCompany: (newComp: Omit<Company, 'id'>) => void;
+  deleteCompany: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -100,20 +97,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   });
 
-  // Companies state (read-only seeded list — no UI writes to it)
-  const [companies] = useState<Company[]>(() => {
+  // Companies state (starts blank, user can add custom companies)
+  const [companies, setCompanies] = useState<Company[]>(() => {
     const saved = localStorage.getItem('nsp_companies');
     if (!saved) return INITIAL_COMPANIES;
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : INITIAL_COMPANIES;
-    } catch (e) {
-      console.error('Could not read saved companies, restoring defaults:', e);
+      if (Array.isArray(parsed)) {
+        // Discard any legacy seeded mock companies
+        return parsed.filter(
+          (c: any) =>
+            c &&
+            c.name &&
+            !c.name.toLowerCase().includes('sigma') &&
+            !c.name.toLowerCase().includes('devi') &&
+            !c.name.toLowerCase().includes('apex') &&
+            !c.name.toLowerCase().includes('sandhya') &&
+            !c.name.toLowerCase().includes('nsp lab')
+        );
+      }
+      return INITIAL_COMPANIES;
+    } catch {
       return INITIAL_COMPANIES;
     }
   });
 
-  // Sample requests state (clean out any legacy test samples like GNR Kuppanapudi)
+  // Sample requests state (clean out any legacy test samples)
   const [requests, setRequests] = useState<SampleRequest[]>(() => {
     const saved = localStorage.getItem('nsp_requests');
     if (!saved) return [];
@@ -126,17 +135,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             r.locationName?.toLowerCase().includes('kuppanapudi')
           )
       );
-    } catch (e) {
+    } catch {
       return [];
     }
   });
 
-  // Settings state
+  // Settings state (no hardcoded API keys)
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('nsp_settings');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Ensure no legacy leaked hardcoded API key lingers in localStorage
+        if (parsed.googleMapsApiKey) {
+          parsed.googleMapsApiKey = DEFAULT_API_KEY;
+        }
+        return parsed;
       } catch (e) {
         console.error(e);
       }
@@ -144,7 +158,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return {
       googleMapsApiKey: DEFAULT_API_KEY,
       mapCenter: { lat: 16.5449, lng: 81.5212 }, // Bhimavaram center
-      mapZoom: 11,
+      mapZoom: 12,
       mapTypeId: 'hybrid'
     };
   });
@@ -180,22 +194,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newReq: SampleRequest = {
       ...reqData,
       id: sampleId,
-      assignedSamplerId: samplerId,
       status: 'assigned',
+      assignedSamplerId: samplerId,
       tonnageNumber: tonnage,
       createdAt: new Date().toISOString()
     };
 
-    // 1. Update requests state
+    // 1. Add request
     setRequests((prev) => [newReq, ...prev]);
 
-    // 2. Dynamic Sampler Movement: Move sampler's current location directly to this new pond!
+    // 2. Move sampler location to this pond
     setSamplers((prev) =>
       prev.map((s) => {
         if (s.id === samplerId) {
           return {
             ...s,
-            status: 'busy',
             currentLocation: {
               name: reqData.locationName,
               subLocation: reqData.subLocation,
@@ -225,8 +238,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               ...s,
               currentLocation: {
                 name: locationName,
-                coords,
                 subLocation,
+                coords,
                 lastUpdated: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               }
             }
@@ -258,7 +271,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteSampler = (samplerId: string) => {
     setSamplers((prev) => prev.filter((s) => s.id !== samplerId));
-    // Return this sampler's samples to 'pending' so no request points at a deleted sampler
     setRequests((prev) =>
       prev.map((r) =>
         r.assignedSamplerId === samplerId
@@ -281,7 +293,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAssignments: []
       }))
     );
-    // Clear the day's samples (the persistence effect writes the empty list back to localStorage)
     setRequests([]);
   };
 
@@ -291,7 +302,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteSampleRequest = (id: string) => {
     setRequests((prev) => prev.filter((r) => r.id !== id));
-    // Also drop it from any sampler's active-assignment list
     setSamplers((prev) =>
       prev.map((s) =>
         s.activeAssignments.includes(id)
@@ -305,6 +315,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'collected' } : r))
     );
+  };
+
+  const addCompany = (newComp: Omit<Company, 'id'>) => {
+    const created: Company = {
+      ...newComp,
+      id: `comp-${Date.now()}`
+    };
+    setCompanies((prev) => [...prev, created]);
+  };
+
+  const deleteCompany = (id: string) => {
+    setCompanies((prev) => prev.filter((c) => c.id !== id));
   };
 
   return (
@@ -324,7 +346,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         resetAllSamplersToHome,
         updateSettings,
         deleteSampleRequest,
-        markSampleCollected
+        markSampleCollected,
+        addCompany,
+        deleteCompany
       }}
     >
       {children}
@@ -332,7 +356,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
-export const useApp = () => {
+export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');

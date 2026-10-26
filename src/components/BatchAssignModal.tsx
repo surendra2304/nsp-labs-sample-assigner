@@ -31,42 +31,8 @@ interface SamplerRoutePlan {
 export const BatchAssignModal: React.FC<BatchAssignModalProps> = ({ isOpen, onClose }) => {
   const { samplers, companies, createAndAssignSample } = useApp();
 
-  const [bulkInput, setBulkInput] = useState(`Harvest date 26/10/26
-Gnr
-90c-2tons
-255+
-Narasapuram
-+919014747367
-
-Harvest date 26/10/26
-Gnr
-80c-6tons
-290+
-Mogalthuru
-9703051223
-
-Harvest date 26/10/26
-Gnr
-70c-3tons
-270+
-Vempa
-9848011223
-
-Harvest date 26/10/26
-Gnr
-100c-4tons
-240+
-Bhimavaram
-9440123456
-
-Harvest date 26/10/26
-Gnr
-85c-5tons
-285+
-Undi
-9988776655`);
-
-  const [company, setCompany] = useState(companies[0]?.name || 'Sigma sea foods');
+  const [bulkInput, setBulkInput] = useState('');
+  const [company, setCompany] = useState(companies[0]?.name || '');
   const [plans, setPlans] = useState<SamplerRoutePlan[] | null>(null);
   const [applied, setApplied] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
@@ -222,17 +188,27 @@ Undi
               </label>
               <div className="flex items-center gap-1 text-xs">
                 <span className="text-slate-500 text-[11px]">Company:</span>
-                <select
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className="bg-slate-100 px-2 py-1 rounded border border-slate-200 text-xs font-bold outline-none cursor-pointer"
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                {companies.length > 0 ? (
+                  <select
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="bg-slate-100 px-2 py-1 rounded border border-slate-200 text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="">(None)</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="bg-slate-100 px-2 py-1 rounded border border-slate-200 text-xs font-bold outline-none w-28"
+                  />
+                )}
               </div>
             </div>
 
@@ -240,7 +216,6 @@ Undi
               rows={5}
               value={bulkInput}
               onChange={(e) => setBulkInput(e.target.value)}
-              placeholder="Paste multiple messages here..."
               className="w-full text-base sm:text-xs font-mono p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-purple-500 outline-none"
             />
 
